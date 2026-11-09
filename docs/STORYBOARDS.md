@@ -1,4 +1,4 @@
-# Storyboards: Phase 2 (awaiting William's approval)
+# Storyboards: Phase 2
 
 All three concepts tell the same nine beats in the same order, read only from
 `src/content/cv.ts`, and reuse the shared chrome (chapter nav, language toggle, contact form,
@@ -163,11 +163,10 @@ critical systems stable`. No numbers or timestamps.
 
 ## 3. `concept/worlds`: A small world to explore (clickable world, version 2)
 
-William asked (2026-11-09) for a more literal, clickable world for comparison. Version 2 is
-proposed to replace the first version, which stays below as **3b** until he chooses between
-them (question W1). The 3b palettes (with the mapping below), the 3b fonts (Space Grotesk and
-Inter, answer 3) and the nine beats stay normative for version 2, even if 3b's story is
-dropped.
+William asked (2026-11-09) for a more literal, clickable world for comparison, and then
+approved version 2 (2026-11-09, W1). The first version stays below as **3b**, as a record.
+The 3b palettes (with the mapping below), the 3b fonts (Space Grotesk and Inter, answer 3)
+and the nine beats stay normative for version 2, even though 3b's story is dropped.
 
 **Idea:** one illustrated map of a small, fictional world. Each industry is a **district**,
 connected by a road in story order. There are two ways to explore it:
@@ -188,14 +187,22 @@ React renders. The shared fix for that lands on `main` first; the map depends on
 
 **One shared jump behavior.** The map and the chapter nav use the same helper: native hash
 navigation (so Back works), then `focus({ preventScroll: true })` on the target's heading,
-which gets `tabindex="-1"`. Native hash navigation scrolls the element that carries the
+which gets `tabindex="-1"`. The helper finds that heading generically: the first
+descendant heading with `tabindex="-1"` of whatever element carries the `id` (section,
+article, nav or other).
+Other jump targets, such as the map, opt in to the same scroll margin with a generic
+`data-jump-target` attribute. Native hash navigation scrolls the element that carries the
 `id` (the chapter `<section>`, the job `<article>`, the education entry), so that element
 is what must clear the sticky bars:
 
-- **Every jump target** (chapter sections, job articles, education entries) gets a
-  `scroll-margin-top` equal to the site header's height, plus the map strip's height in the
-  768–1023 px layout. The focused heading then always lands below the header and the strip
-  (WCAG 2.4.11).
+- **Every jump target** gets a `scroll-margin-top` that clears the site header. The shared
+  rule targets the attributes, not one component: `[data-chapter]`, `[data-job]`,
+  `[data-education]` and `[data-jump-target]` (the map uses the last), so concept-specific
+  cards (such as Journey's own job stops, which are
+  `<article id="job-…" data-job>`) are covered too. The value comes from a CSS custom
+  property (for example `--jump-offset`, defaulting to the header height). Worlds adds the
+  map strip's height to it in its own CSS for the 768–1023 px layout. The focused heading
+  then always lands below the header and the strip (WCAG 2.4.11).
 - **Education entries get ids** (for example `edu-computer-science`) and a `tabindex="-1"`
   heading, like jobs, so the university can link to the degree.
 
@@ -228,7 +235,10 @@ only when the viewport is at least 768 px wide **and** at least 600 px tall. Lan
   jumps to its entry (touch targets ≥ 44 × 44 px). If the wide map would make labels or
   targets too small at 320 px, the overview may use a taller, portrait arrangement of the
   same districts. Each chapter opens with a small, static vignette of its district and ends
-  with a "Back to the map" link.
+  with a "Back to the map" link. Its target is the map itself: the map's
+  `<nav id="world-map">` starts with a visually hidden heading "World map" (`tabindex="-1"`),
+  and the shared jump behavior focuses that heading, so the next Tab reaches the first
+  building.
 
 **Colors.** Each place uses one row of the 3b palette table; colors are fixed and ignore
 light/dark mode (answer 6):
@@ -247,6 +257,11 @@ light/dark mode (answer 6):
 In every layout (split and overview) each chapter is painted in its district's background
 and surface colors. Chapters sit edge to edge, so the colors change at chapter boundaries
 with no full-screen crossfade (3b's crossfade isn't needed).
+
+**One exception inside a chapter:** the ATOS Jan–Jun 2023 entry sits in the enterprise
+(banking) chapter, but it keeps answer 4's neutral "Between worlds" panel: its own solid
+surface in the Between-worlds palette row, with "Between worlds" as visible text above its
+heading. It must not look like a banking project.
 
 **Districts and beats:**
 
@@ -272,7 +287,7 @@ with no full-screen crossfade (3b's crossfade isn't needed).
 7. **Next: AI frontier.** An observatory still under scaffolding at the edge of the map: the
    Postgraduate in AI Engineering (UNIPDS), with AI fundamentals, LLMs, RAG and AI agents as
    four signs marked "In progress".
-8. **Toolbox: the workshop** in the town square. The shared skills explorer: choosing a skill
+8. **Toolbox: the workshop** near the arrival point. The shared skills explorer: choosing a skill
    lights up every building whose job used it, and the result is also written as text with
    links in a live region. Certifications (hours where the CV gives them) and spoken
    languages are listed below.
@@ -286,7 +301,7 @@ Twelve links, in story order. A job drawn as two buildings is one link around bo
 | Building                               | Links to                | Visible label (= accessible name)              |
 | -------------------------------------- | ----------------------- | ---------------------------------------------- |
 | Factory with gears                     | `#job-novus`            | Novus Automação                                |
-| University                             | `#edu-computer-science` | The degree and school from `cv.ts` (UniRitter) |
+| University                             | `#edu-computer-science` | Computer Science · UniRitter                   |
 | Bank with a vault                      | `#job-atos-bradesco`    | ATOS · Bradesco                                |
 | Plaza with a signpost                  | `#job-atos-frontend`    | Between worlds · ATOS                          |
 | Power plant                            | `#job-atos-cpfl`        | ATOS · CPFL                                    |
@@ -302,7 +317,9 @@ The "ATOS · client" labels follow William's Journey decision. District names on
 ("Banking district" and so on) are decorative signs (`aria-hidden`); each chapter also shows
 its district name as visible text above the chapter heading, so nothing is lost.
 
-- The map is an inline SVG inside `<nav aria-label="World map">`. The links are SVG
+- The map is an inline SVG inside `<nav id="world-map" data-jump-target>`, named through
+  `aria-labelledby` by its visually hidden "World map" heading (so the name isn't announced
+  twice). The links are SVG
   `<a href>` elements inside a `<g role="list">`, each in a `<g role="listitem">`, in story
   order. The `<svg>` itself never gets `role="img"` or `aria-hidden`.
 - **Fallback:** `role="list"` on SVG groups is exposed well in Chromium and Firefox, less
@@ -482,6 +499,8 @@ in English in both languages; see question 7.
 | Worlds   | Industrial district                               | Distrito industrial                                                               |
 | Worlds   | Banking district                                  | Distrito bancário (or: Polo bancário)                                             |
 | Worlds   | Between worlds                                    | Entre mundos                                                                      |
+| Worlds   | Between worlds · ATOS (map label)                 | Entre mundos · ATOS                                                               |
+| Worlds   | Computer Science · UniRitter (map label)          | Ciência da Computação · UniRitter                                                 |
 | Worlds   | Energy district                                   | Distrito de energia (or: Polo de energia)                                         |
 | Worlds   | Corporate district                                | Distrito corporativo (or: Polo corporativo)                                       |
 | Worlds   | Cement, cargo and trucks district                 | Distrito de cimento, cargas e caminhões (or: Polo de cimento, cargas e caminhões) |
@@ -639,6 +658,21 @@ The critic approved the build first. Then William decided:
 3. **Vercel:** Vercel Authentication and the Vercel Toolbar are off for previews. The
    production domain is `portfolio-bice-two-69.vercel.app`.
 
+## William's answers on Worlds version 2 (2026-11-09)
+
+1. **W1: version 2, the clickable world** (section 3), is approved as the third concept.
+   Version 3b stays in this document only as a record.
+2. **W2 and W3:** William's words were "I approve the worlds in the section 3". W2 and W3
+   had no comments, so the recommendation and the stated default (first PT option) apply:
+   the ambient touches stay, and the version 2 Worlds copy uses the first PT option where
+   two are offered ("Seis distritos, um desenvolvedor", "Distrito …", "Correio"). The two
+   map labels added afterwards ("Between worlds · ATOS", "Computer Science · UniRitter") are
+   new copy. They are shown to William with the spike, together with a one-line
+   confirmation of those PT choices.
+3. **Next steps:** the shared jump behavior lands on `main` first, then a spike (sticky stage,
+   camera, focus, jump, Lighthouse on mobile) goes through the critic and to William before
+   the full build on `concept/worlds`.
+
 ## Questions for William on Worlds version 2 (2026-11-09)
 
 W1. **Which Worlds becomes the third concept?**
@@ -669,4 +703,4 @@ them. Three points to check:
   "Polo de energia") is offered as the alternative for the others.
 
 Without comments, the first PT option is used where two are offered. If you choose B in W1,
-the 3b rows below the table apply instead.
+the 3b rows in the new-copy section apply instead.
