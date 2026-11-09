@@ -41,7 +41,7 @@ export function BaseStory() {
     <div ref={root} className="base-story">
       <ChapterSection id="hook" hideTitle className="base-chapter base-hook">
         {/* <Avatar /> */}
-        <h1>{cv.identity.name}</h1>
+        <h1 tabIndex={-1}>{cv.identity.name}</h1>
         <p className="base-hook__role">
           {t(cv.role, lang)} · {t(cv.identity.location, lang)}
         </p>

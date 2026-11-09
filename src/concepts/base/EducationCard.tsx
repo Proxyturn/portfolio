@@ -9,9 +9,9 @@ export function EducationCard({ entry }: { readonly entry: Education }) {
     ? format(dict.story.graduated, { date: formatYearMonth(entry.graduated, lang) })
     : dict.story.inProgress;
   return (
-    <article className="job reveal" data-education={entry.id}>
+    <article className="job reveal" id={`edu-${entry.id}`} data-education={entry.id}>
       <header>
-        <h3>{t(entry.title, lang)}</h3>
+        <h3 tabIndex={-1}>{t(entry.title, lang)}</h3>
         <p className="job__period">
           {entry.institution} · {status}
         </p>

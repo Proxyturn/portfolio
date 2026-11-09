@@ -109,18 +109,18 @@ William's request
   https://portfolio-bice-two-69.vercel.app. The contact-form env vars are still to do.
 - **Phase 2:** storyboards and the question batch for William are in `docs/STORYBOARDS.md`.
   Critic verdicts (2026-11-09, round 3): A storyboards APPROVED, B questions APPROVED, C
-  project setup APPROVED. Presented to William; answers recorded at the end of
-  `docs/STORYBOARDS.md`. Storyboards are approved one by one.
+  project setup APPROVED. Presented to William (an earlier pre-critic draft had been shown
+  to him before the gate existed); answers recorded at the end of `docs/STORYBOARDS.md`.
+  Storyboards are approved one by one.
   - **Journey:** approved by William (2026-11-09) and built on `concept/journey`. The critic
     approved the build; William's decisions on it (copy, labels, skills line, CV caption) are
     recorded at the end of `docs/STORYBOARDS.md`.
   - **Terminal:** approved by William (2026-11-09), copy included; being built on
     `concept/terminal`.
-  - **Worlds:** not approved yet. At William's request it now has a clickable-world version 2
-    (section 3), with the first version kept as 3b for comparison. He chooses between them
-    (question W1).
-
-  An earlier pre-critic draft had been shown to him before the gate existed.
+  - **Worlds:** version 2, the clickable world (section 3), approved by William (2026-11-09).
+    The shared jump behavior lands on `main` first, then a spike goes to the critic and to
+    William before the full build on `concept/worlds`. Version 3b is kept only as a record.
+    Two new map labels and a confirmation of the PT copy are pending his OK with the spike.
 
 ## Conventions (summary; details in README.md)
 

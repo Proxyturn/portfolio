@@ -60,9 +60,31 @@ textarea {
   outline-offset: 3px;
 }
 
-/* Chapters sit under the sticky header when jumped to. */
-[data-chapter] {
-  scroll-margin-top: 5rem;
+/*
+ * Jump targets (see src/components/jump.ts): chapters, job and education entries, and any
+ * element a concept opts in with `data-jump-target`. Each one stops below everything sticky
+ * at the top: `--jump-offset` = `--site-header-height` + `--jump-gap`.
+ * - `--site-header-height` is measured at runtime (useHeaderHeight writes it on :root in px).
+ *   The header is about 59 px, but where the chapter nav overflows, a classic (non-overlay)
+ *   horizontal scrollbar makes it taller (about 69 px); 3.75rem is only the pre-JS fallback.
+ * - `--jump-gap` also absorbs a card that is still 24 px low from its reveal animation when the
+ *   browser scrolls to it, so it still settles below the header.
+ * A concept with more sticky chrome adds to the offset, for example
+ * `--jump-offset: calc(var(--site-header-height) + var(--map-strip-height) + var(--jump-gap));`.
+ * Focusable headings get the same margin, as a safety net for links to a heading's own id.
+ */
+:root {
+  --site-header-height: 3.75rem;
+  --jump-gap: 1.5rem;
+  --jump-offset: calc(var(--site-header-height) + var(--jump-gap));
+}
+
+[data-chapter],
+[data-job],
+[data-education],
+[data-jump-target],
+:is(h1, h2, h3, h4, h5, h6)[tabindex='-1'] {
+  scroll-margin-top: var(--jump-offset);
 }
 
 .visually-hidden {

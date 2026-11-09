@@ -28,7 +28,11 @@ export function ChapterSection({ id, children, className, hideTitle = false }: P
       aria-label={hideTitle && chapter ? t(chapter.navLabel, lang) : undefined}
       className={className}
     >
-      {!hideTitle && chapter && <h2 id={titleId}>{t(chapter.title, lang)}</h2>}
+      {!hideTitle && chapter && (
+        <h2 id={titleId} tabIndex={-1}>
+          {t(chapter.title, lang)}
+        </h2>
+      )}
       {children}
     </section>
   );
