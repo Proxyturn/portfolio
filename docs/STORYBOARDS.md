@@ -181,9 +181,8 @@ connected by a road in story order. There are two ways to explore it:
 **How they stay in sync:** scroll position drives the camera, the progress bar and the
 chapter nav's "current" mark. Clicks drive the URL and the browser history, so the Back
 button returns to where you were, and the camera follows that scroll too. A deep link such
-as `/#now` opens the page at that chapter with the camera already on its district. (Opening
-a deep link on load doesn't work yet on any branch, because the sections only exist after
-React renders. The shared fix for that lands on `main` first; the map depends on it.)
+as `/#now` opens the page at that chapter with the camera already on its district. (Deep links on load, reload
+and Back work on `main` since the shared jump behavior landed, commit b62f634.)
 
 **One shared jump behavior.** The map and the chapter nav use the same helper: native hash
 navigation (so Back works), then `focus({ preventScroll: true })` on the target's heading,
@@ -200,7 +199,7 @@ is what must clear the sticky bars:
   `[data-education]` and `[data-jump-target]` (the map uses the last), so concept-specific
   cards (such as Journey's own job stops, which are
   `<article id="job-…" data-job>`) are covered too. The value comes from a CSS custom
-  property (for example `--jump-offset`, defaulting to the header height). Worlds adds the
+  property, `--jump-offset`: the header height (measured at runtime) plus a small gap. Worlds adds the
   map strip's height to it in its own CSS for the 768–1023 px layout. The focused heading
   then always lands below the header and the strip (WCAG 2.4.11).
 - **Education entries get ids** (for example `edu-computer-science`) and a `tabindex="-1"`
@@ -406,7 +405,7 @@ trapping and a separate mobile design.
 
 ---
 
-### 3b. First version: industries as worlds (superseded, kept for comparison)
+### 3b. First version: industries as worlds (superseded; kept as a record)
 
 **Look:** each sector is its own world with its own palette and a geometric SVG motif that I
 draw myself (no stock art). The palettes are fixed per world and don't switch with light or
@@ -509,8 +508,8 @@ in English in both languages; see question 7.
 | Worlds   | Workshop                                          | Oficina                                                                           |
 | Worlds   | Post office                                       | Correio (or: Agência dos correios)                                                |
 
-The Worlds rows above are for version 2 (the clickable world). If William keeps version 3b
-instead (question W1), these 3b rows apply instead:
+The Worlds rows above are for version 2 (the clickable world), which William chose in W1.
+Version 3b's rows, kept only as a record:
 
 | Concept   | EN                        | PT-BR (proposed)                         |
 | --------- | ------------------------- | ---------------------------------------- |
@@ -673,7 +672,7 @@ The critic approved the build first. Then William decided:
    camera, focus, jump, Lighthouse on mobile) goes through the critic and to William before
    the full build on `concept/worlds`.
 
-## Questions for William on Worlds version 2 (2026-11-09)
+## Questions for William on Worlds version 2 (2026-11-09, answered above)
 
 W1. **Which Worlds becomes the third concept?**
 
@@ -702,5 +701,4 @@ them. Three points to check:
 - In PT, "distrito" sounds most natural in "distrito industrial". "Polo" (for example
   "Polo de energia") is offered as the alternative for the others.
 
-Without comments, the first PT option is used where two are offered. If you choose B in W1,
-the 3b rows in the new-copy section apply instead.
+Without comments, the first PT option is used where two are offered.
