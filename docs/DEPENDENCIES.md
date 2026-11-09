@@ -9,10 +9,22 @@ the same change.
 
 ## Runtime: shipped to visitors (browser bundle)
 
-| Package              | Version | Why                                                                                                                                        | Notes                                        |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
-| `react`, `react-dom` | 19.3.1  | UI framework (fixed decision).                                                                                                             | No transitive runtime dependencies.          |
-| `gsap`               | 3.15.1  | Scroll storytelling: tweens, timelines, `ScrollTrigger` (fixed decision). Free for commercial use, including all plugins, since GSAP 3.13. | Zero dependencies. Wrapped in `src/motion/`. |
+| Package              | Version | Why                                                                                                                                        | Notes                                                                                                                                           |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `react`, `react-dom` | 19.3.1  | UI framework (fixed decision).                                                                                                             | No transitive runtime dependencies.                                                                                                             |
+| `gsap`               | 3.15.1  | Scroll storytelling: tweens, timelines, `ScrollTrigger` (fixed decision). Free for commercial use, including all plugins, since GSAP 3.13. | Zero dependencies. Wrapped in `src/motion/`. The Journey concept also uses `gsap/MotionPathPlugin`, which ships inside `gsap` (no new package). |
+
+## Runtime: Journey concept fonts (`concept/journey` branch only)
+
+These two packages exist **only on the `concept/journey` branch**. They are not on `main`.
+Approved by William on 2026-11-09 (storyboard question 3).
+
+| Package                              | Version | Why                                              | Notes                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------ | ------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@fontsource-variable/fraunces`      | 5.3.0   | Journey headings and signposts (variable serif). | SIL OFL 1.1. Self-hosted, no JavaScript, no dependencies. Only the Latin subset, upright, weight axis (`fraunces-latin-wght-normal.woff2`, 36.6 kB) is referenced, through our own `@font-face` in `src/concepts/journey/fonts.css`; the package's own CSS (all subsets) is not imported, so no other file is built or downloaded. |
+| `@fontsource-variable/source-sans-3` | 5.3.1   | Journey body text (variable sans).               | SIL OFL 1.1. Same approach: only `source-sans-3-latin-wght-normal.woff2` (28.9 kB) is shipped. Latin (U+0000-00FF plus punctuation) covers every EN and PT-BR character the site uses.                                                                                                                                             |
+
+Transfer cost for visitors: 65.5 kB of fonts in total (both files, already compressed WOFF2).
 
 ## Runtime: server only (`/api/contact` Vercel Function, never in the browser bundle)
 

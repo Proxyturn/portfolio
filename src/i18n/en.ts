@@ -73,4 +73,15 @@ export const en = {
   footer: {
     rights: '© {year} William Amaro Finardi. All rights reserved.',
   },
+  /** Journey / road-trip concept (concept/journey branch only). */
+  journey: {
+    startTrip: 'Start the trip',
+    youAreHere: 'You are here',
+    destination: 'Destination',
+    glovebox: 'Glovebox',
+    travelLog: 'Travel log',
+    phrasebook: 'Phrasebook',
+    sendPostcard: 'Send a postcard',
+    takeTheMap: 'Take the map with you',
+  },
 } as const;

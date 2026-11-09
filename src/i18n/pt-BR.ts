@@ -73,4 +73,14 @@ export const ptBR: Dictionary = {
   footer: {
     rights: '© {year} William Amaro Finardi. Todos os direitos reservados.',
   },
+  journey: {
+    startTrip: 'Comece a viagem',
+    youAreHere: 'Você está aqui',
+    destination: 'Destino',
+    glovebox: 'Porta-luvas',
+    travelLog: 'Diário de bordo',
+    phrasebook: 'Guia de conversação',
+    sendPostcard: 'Envie um cartão-postal',
+    takeTheMap: 'Leve o mapa com você',
+  },
 };
