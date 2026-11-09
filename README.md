@@ -21,20 +21,21 @@ To run the contact function locally too, use the Vercel CLI after linking the pr
 
 ## Scripts
 
-| Script                            | What it does                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------- |
-| `npm run dev`                     | Vite dev server                                                                       |
-| `npm run build`                   | Type-check and build to `dist/`                                                       |
-| `npm run preview`                 | Serve `dist/` with the **production security headers** from `vercel.json`             |
-| `npm run lint`                    | ESLint (includes security bans)                                                       |
-| `npm run format` / `format:check` | Prettier write / check                                                                |
-| `npm run typecheck`               | `tsc` for the app, tooling and the API                                                |
-| `npm test`                        | All Vitest projects: `unit` (jsdom), `api` (node), `privacy` (node)                   |
-| `npm run test:coverage`           | Same, with coverage thresholds (80% lines and branches for `src/` and `api/`)         |
-| `npm run test:privacy`            | Privacy scan only (source + `dist/` when present)                                     |
-| `npm run test:e2e`                | Playwright: Chromium, Firefox, WebKit, mobile (builds first locally)                  |
-| `npm run test:headers`            | Security headers against a deployed URL: `PREVIEW_URL=https://… npm run test:headers` |
-| `npm run check`                   | Everything CI runs before E2E                                                         |
+| Script                            | What it does                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| `npm run dev`                     | Vite dev server                                                                            |
+| `npm run build`                   | Type-check and build to `dist/`                                                            |
+| `npm run preview`                 | Serve `dist/` with the **production security headers** from `vercel.json`                  |
+| `npm run lint`                    | ESLint (includes security bans)                                                            |
+| `npm run format` / `format:check` | Prettier write / check                                                                     |
+| `npm run typecheck`               | `tsc` for the app, tooling and the API                                                     |
+| `npm test`                        | All Vitest projects: `unit` (jsdom), `api`, `scripts` and `privacy` (node)                 |
+| `npm run test:coverage`           | Same, with coverage thresholds (80% lines and branches for `src/`, `api/`, `scripts/`)     |
+| `npm run test:privacy`            | Privacy scan only (source + `dist/` when present)                                          |
+| `npm run test:e2e`                | Playwright: Chromium, Firefox, WebKit, mobile (builds first locally)                       |
+| `npm run test:headers`            | Security headers against a deployed URL: `PREVIEW_URL=https://… npm run test:headers`      |
+| `npm run check`                   | Everything CI runs before E2E                                                              |
+| `npm run cv`                      | Regenerate the CV PDF from `src/content/cv.ts` (commit only a Windows build; see "CV PDF") |
 
 First E2E run: `npx playwright install chromium firefox webkit`.
 
@@ -62,7 +63,8 @@ src/
 e2e/                   Playwright specs (story, nav and keyboard, i18n, reduced motion, contact,
                        CV, axe, CSP, deployed headers)
 tests/api/             handler tests (provider and rate-limit store mocked)
-tests/privacy/         privacy scan of source, content and dist/
+tests/privacy/         privacy scan of source, content, dist/ and the CV PDF
+scripts/cv/            CV PDF generator (template, build, manifest)
 docs/DEPENDENCIES.md   every dependency and why
 ```
 
@@ -96,17 +98,55 @@ None use the `VITE_` prefix, so none can reach the browser bundle.
 
 GitHub Actions secrets:
 
-| Name                              | Purpose                                                            |
-| --------------------------------- | ------------------------------------------------------------------ |
-| `PRIVACY_DENYLIST`                | Exact private strings the privacy scan must never find (see below) |
-| `VERCEL_AUTOMATION_BYPASS_SECRET` | Lets the preview checks reach protected Vercel previews            |
+| Name                              | Purpose                                                                                                                                                                       |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PRIVACY_DENYLIST`                | Exact private strings the privacy scan must never find (see below); never the public email. Set it under **both** Actions secrets and Dependabot secrets, with the same value |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | Lets the preview checks reach protected Vercel previews                                                                                                                       |
 
 ## Privacy scan
 
 `tests/privacy/privacy.test.ts` fails the build if a phone number (any Brazilian format,
 `tel:` or WhatsApp links) or an age appears in any committed file or in
 `dist/`. Exact private values are **never committed**. Put them, one per line, in an
-untracked `.privacy-denylist` file locally, and in the `PRIVACY_DENYLIST` secret for CI.
+untracked `.privacy-denylist` file locally, and in the `PRIVACY_DENYLIST` secret for CI (as
+an Actions secret and, with the same value, a Dependabot secret, since Dependabot runs only
+read Dependabot secrets). CI sets `PRIVACY_DENYLIST_REQUIRED=1` on every run except pull
+requests from forks, which get no secrets, and the test then fails if the denylist is
+empty. Never add the email to the denylist: it is
+public, and the CV PDF links it by William's decision (A, 2026-11-09). A test fails if a
+denylist entry matches it.
+
+## CV PDF
+
+`public/cv/William-Amaro-Finardi-CV.pdf` is generated from `src/content/cv.ts`, so the site
+and the PDF cannot disagree. It is English only.
+
+- `scripts/cv/template.ts` turns the CV data into HTML (pure, unit-tested). Its print-only
+  labels ("Professional Summary", "Clients:", "Frontend development"…) and layout rules
+  (ATOS grouping, summary merge, coursework casing) were approved with the CV draft and live
+  there, not in `src/i18n/`.
+- `npm run cv` (`scripts/cv/build.ts`) prints that HTML to A4 with Playwright's Chromium
+  (tagged PDF with an outline, JavaScript off) and writes `scripts/cv/cv-pdf.manifest.json`:
+  the SHA-256 of the HTML rendered with `EMAIL_PLACEHOLDER` instead of the address, and the
+  SHA-256 of the PDF. The metadata is only the title plus Chromium's Creator, Producer and
+  dates.
+- The email is a visible `mailto:` link in the PDF (William's decision, 2026-11-09), so the
+  address is in the committed PDF: the one exception to the rule that it is never written in
+  plain text in the repo.
+- Node runs the TypeScript directly with `--experimental-strip-types` (Node 22.12+), so the
+  build imports use `.ts` paths (`allowImportingTsExtensions` in `tsconfig.node.json`).
+  `cv.ts`, `email.ts`, `template.ts` and anything they import must stay loadable by plain
+  Node ESM: runtime imports need `.ts` paths, and imports of types must be `import type`.
+- The script runs anywhere, but **the committed PDF must be generated on Windows**. The
+  layout uses Calibri, the font it was approved with; other systems would substitute a font
+  and reflow the pages. CI never regenerates it.
+- Every `npm run cv` changes the PDF bytes and the manifest (Chromium writes the creation
+  date), even with identical input. Run it only when `cv.ts` or the template changed, read the
+  `pdftotext` output (default, `-layout` and `-raw`) before committing, and commit the PDF
+  and the manifest together.
+- The privacy test regenerates the HTML, scans it, checks the HTML and PDF hashes against the
+  manifest (a consistency check, not proof of how the PDF was made), and checks the PDF's
+  metadata and its three link targets.
 
 ## Deploy
 
