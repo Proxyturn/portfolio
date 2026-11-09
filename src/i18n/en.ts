@@ -73,4 +73,11 @@ export const en = {
   footer: {
     rights: '© {year} William Amaro Finardi. All rights reserved.',
   },
+  /** Terminal / code world concept (concept/terminal branch only). */
+  terminal: {
+    motd: 'Message of the day',
+    deploying: 'Deploying to the future',
+    openLinkedIn: 'Open LinkedIn',
+    openGitHub: 'Open GitHub',
+  },
 } as const;

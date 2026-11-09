@@ -1,0 +1,791 @@
+/*
+ * Terminal / code world: a dark terminal and code editor with a phosphor-green prompt.
+ * Dark only (William, 2026-11-09). Every token from src/theme/themes.ts is defined here, plus
+ * two concept tokens (warning/incident and links/info).
+ *
+ * Contrast (WCAG 2.x, computed), on background #0b0f0c / panel #111814:
+ *   text 14.5/13.5, muted 8.5/7.9, accent 13.8/12.9, warn 11.0/10.2, info 10.2/9.5,
+ *   danger 8.5/7.9, success 13.8/12.9, focus 10.2/9.5, border 3.8/3.6,
+ *   accent-contrast on accent 13.8
+ *
+ * tokens.css sets its dark values with :root:not([data-color-scheme='light']) (specificity
+ * 0,2,0) inside a dark media query. `html:root[data-theme='terminal']` is 0,2,1, so these
+ * values win in both OS color schemes, whichever stylesheet loads first.
+ */
+html:root[data-theme='terminal'] {
+  color-scheme: dark;
+  --color-bg: #0b0f0c;
+  --color-surface: #111814;
+  --color-text: #d7e2d9;
+  --color-text-muted: #9fb0a3;
+  --color-accent: #7cf29a;
+  --color-accent-contrast: #0b0f0c;
+  --color-border: #5f7366;
+  --color-focus: #6cc7f0;
+  --color-danger: #ff8b7d;
+  --color-success: #7cf29a;
+  --term-warn: #ffb454;
+  --term-info: #6cc7f0;
+  --font-body:
+    'IBM Plex Sans Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display:
+    'JetBrains Mono Variable', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  --radius: 6px;
+  --space-gutter: clamp(16px, 4vw, 40px);
+  --max-width: 72rem;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Story, chapters, windows                                                                    */
+/* ------------------------------------------------------------------------------------------ */
+
+.terminal {
+  /* Static texture: one soft glow behind the boot screen, no tiles across the page. */
+  background:
+    radial-gradient(
+        ellipse 70% 40% at 50% 0%,
+        color-mix(in srgb, var(--color-accent) 7%, transparent),
+        transparent 70%
+      )
+      no-repeat,
+    var(--color-bg);
+}
+
+.terminal a {
+  color: var(--term-info);
+}
+
+.terminal code {
+  font-family: var(--font-mono);
+  font-size: 1em;
+}
+
+.terminal h3 {
+  font-size: 1rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.term-chapter {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: clamp(2.5rem, 7vw, 4.5rem) var(--space-gutter);
+}
+
+.term-chapter > h2,
+.term-now__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1.25rem;
+  font-size: clamp(1.3rem, 3vw, 1.7rem);
+  font-weight: 600;
+}
+
+.term-chapter > h2::before,
+.term-now__heading::before {
+  content: '';
+  flex: none;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.term-window {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background-color: var(--color-surface);
+  /* Faint scanlines: a 4 px tile, never animated. */
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--color-text) 2.5%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 100% 4px;
+}
+
+.term-window__bar {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.term-window__dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--color-danger);
+}
+
+.term-window__dot:nth-child(2) {
+  background: var(--term-warn);
+}
+
+.term-window__dot:nth-child(3) {
+  background: var(--color-accent);
+}
+
+/* The git log continues from Origins: no title bar, a dashed top edge. */
+.term-window--continued {
+  border-top-style: dashed;
+}
+
+.term-window--continued .term-window__bar {
+  display: none;
+}
+
+.term-window__body {
+  padding: 1.1rem clamp(1rem, 3vw, 1.75rem) 1.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+
+/* A row clips its line, which slides up into it while fading in (scene.ts). */
+.term-row {
+  overflow: hidden;
+  margin: 0;
+}
+
+.term-line {
+  display: block;
+}
+
+.term-cmd {
+  margin-top: 1rem;
+  color: var(--color-text);
+}
+
+.term-window__body > .term-cmd:first-child {
+  margin-top: 0;
+}
+
+.term-prompt {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.term-comment {
+  color: var(--color-text-muted);
+}
+
+.term-cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.15em;
+  vertical-align: text-bottom;
+  background: var(--color-accent);
+}
+
+.term-arrow__icon {
+  display: inline-block;
+  width: 1.1em;
+  height: 0.65em;
+  margin: 0 0.3em;
+  vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.term-date {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* 1. Boot screen                                                                              */
+/* ------------------------------------------------------------------------------------------ */
+
+/* Static texture: one soft glow behind the boot screen only (a page-tall gradient is slow to
+   paint in software-rendered WebKit). */
+.term-hook {
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 0%,
+    color-mix(in srgb, var(--color-accent) 7%, transparent),
+    transparent 70%
+  );
+  display: grid;
+  align-content: center;
+  min-height: calc(100svh - 4rem);
+}
+
+.term-out {
+  color: var(--color-text);
+}
+
+.terminal .term-hook__name {
+  margin: 0.1em 0 0.2em;
+  color: var(--color-accent);
+  font-size: clamp(1.9rem, 6vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.term-motd {
+  margin-top: 1.25rem;
+  padding: 0.8rem 1rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 4px;
+}
+
+.term-motd__label {
+  margin: 0 0 0.3rem;
+  color: var(--term-warn);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.term-motd__text {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+  line-height: 1.4;
+}
+
+.term-readme {
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+}
+
+.term-readme p {
+  max-width: 68ch;
+  margin: 0.5rem 0 0;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* 2-4. git log career                                                                         */
+/* ------------------------------------------------------------------------------------------ */
+
+.term-graph {
+  position: relative;
+  padding-left: 1.6rem;
+}
+
+.term-graph::before {
+  content: '';
+  position: absolute;
+  top: 0.6rem;
+  bottom: 0.6rem;
+  left: 0.4rem;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.term-window--continued .term-graph::before {
+  top: 0;
+}
+
+.term-commit {
+  position: relative;
+  margin-top: 1.4rem;
+}
+
+.term-window--continued .term-commit:first-child {
+  margin-top: 0;
+}
+
+.term-commit::before {
+  content: '';
+  position: absolute;
+  top: 0.4rem;
+  left: -1.6rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  background: var(--color-surface);
+}
+
+.term-commit--tag::before {
+  border-color: var(--term-warn);
+}
+
+.term-commit__subject {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.term-commit__type {
+  color: var(--term-info);
+}
+
+.term-commit__subject--extra {
+  font-weight: 600;
+  color: var(--term-info);
+}
+
+.term-tag {
+  color: var(--term-warn);
+}
+
+.term-commit__role {
+  color: var(--color-text-muted);
+}
+
+.term-commit__body {
+  margin: 0.35rem 0 0;
+  padding: 0 0 0 1rem;
+  list-style: none;
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+}
+
+.term-commit__body li + li {
+  margin-top: 0.25rem;
+}
+
+.term-ops {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+
+.term-ops__key {
+  color: var(--term-info);
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* 5. Split editor                                                                             */
+/* ------------------------------------------------------------------------------------------ */
+
+.term-editor {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 52rem) {
+  .term-editor {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.term-pane {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.term-pane__tab {
+  display: inline-block;
+  margin: 0;
+  padding: 0.45rem 0.95rem;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  border-top: 2px solid var(--color-accent);
+  border-radius: var(--radius) 0 0 0;
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.term-pane__code {
+  padding: 0.9rem 1rem 1.2rem;
+}
+
+.term-pane__title {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.term-pane__slashes {
+  color: var(--color-text-muted);
+}
+
+.term-pane__lines {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: line;
+  font-family: var(--font-body);
+}
+
+.term-pane__lines li {
+  position: relative;
+  padding-left: 2.4rem;
+  counter-increment: line;
+}
+
+.term-pane__lines li + li {
+  margin-top: 0.3rem;
+}
+
+/* Line numbers; the alternative text '' keeps them out of what screen readers announce. */
+.term-pane__lines li::before {
+  content: counter(line);
+  content: counter(line) / '';
+  position: absolute;
+  top: 0.15em;
+  left: 0;
+  width: 1.6rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* 6. Now: tail -f semantix.log (pinned on wide screens, see scene.ts)                         */
+/* ------------------------------------------------------------------------------------------ */
+
+.term-now__stage {
+  background: var(--color-bg);
+}
+
+.term-now__title {
+  margin-top: 0.75rem;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.term-now__period {
+  color: var(--color-text-muted);
+}
+
+.term-log {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+}
+
+.term-log__line {
+  margin-top: 0.45rem;
+}
+
+/* The marker belongs to the line, so it slides in with it. */
+.term-log__line > .term-line {
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--color-border);
+}
+
+.term-incident {
+  color: var(--term-warn);
+  font-weight: 700;
+}
+
+.term-resolved {
+  color: var(--color-success);
+  font-weight: 700;
+}
+
+.term-log__stack {
+  color: var(--term-info);
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* 7. Next: feature/ai-engineering and the deploy                                              */
+/* ------------------------------------------------------------------------------------------ */
+
+.term-branch__title {
+  margin-top: 0.4rem;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.term-todo {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-body);
+}
+
+.term-todo li + li {
+  margin-top: 0.3rem;
+}
+
+.term-todo__box {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.term-todo__status {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--term-info);
+  border-radius: 4px;
+  color: var(--term-info);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.term-deploy__track {
+  height: 0.9rem;
+  margin-top: 0.4rem;
+  padding: 2px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+}
+
+/* At rest the bar is full: the scene scrubs it from scaleX(0) as the visitor scrolls. */
+.term-deploy__fill {
+  height: 100%;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-accent) 0 0.55rem,
+    transparent 0.55rem 0.7rem
+  );
+  transform-origin: 0 50%;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* 8. Toolbox: man william                                                                     */
+/* ------------------------------------------------------------------------------------------ */
+
+.term-man {
+  margin-top: 0.9rem;
+}
+
+.terminal .skills {
+  display: grid;
+  gap: 1rem;
+}
+
+.terminal .skills__group h3 {
+  margin: 0 0 0.45rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.terminal .skills__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.terminal .skills__chip {
+  min-height: 2.5rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* Must match CHIP_CMD in code.ts. Generated content is part of the button's accessible name. */
+.terminal .skills__chip::before {
+  content: 'grep ';
+  color: var(--color-text-muted);
+}
+
+.terminal .skills__chip:hover {
+  border-color: var(--color-accent);
+}
+
+.terminal .skills__chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.terminal .skills__chip[aria-pressed='true']::before {
+  color: inherit;
+}
+
+.terminal .skills__result {
+  padding: 0.75rem 1rem;
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-bg);
+  font-family: var(--font-body);
+}
+
+.terminal .skills__result p {
+  margin: 0;
+}
+
+.terminal .skills__result ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.term-toolbox {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 1.75rem;
+}
+
+@media (min-width: 52rem) {
+  .term-toolbox {
+    grid-template-columns: 1.4fr 1fr;
+  }
+}
+
+.terminal h3.term-cmd {
+  margin-top: 0;
+  font-weight: 400;
+}
+
+.term-ls,
+.term-locale {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-body);
+}
+
+.term-ls li + li,
+.term-locale li + li {
+  margin-top: 0.25rem;
+}
+
+.term-ls__hours {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.term-locale__name {
+  color: var(--term-info);
+  font-family: var(--font-mono);
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* 9. ./contact.sh                                                                             */
+/* ------------------------------------------------------------------------------------------ */
+
+.term-contact {
+  margin-top: 1rem;
+  font-family: var(--font-body);
+}
+
+.term-contact .contact__links {
+  gap: 0.6rem;
+}
+
+.term-contact .contact__links > p {
+  margin: 0 0 0.25rem;
+}
+
+.term-contact .button {
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Every link: the command in green, then the plain label. */
+.term-contact .contact__links .button {
+  display: inline-block;
+  line-height: 1.6;
+  text-align: left;
+  border-color: var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.term-contact .contact__links .button:hover {
+  border-color: var(--color-accent);
+}
+
+.term-link__cmd,
+.term-contact__cv .button::before,
+.term-contact__email .button::before {
+  color: var(--color-accent);
+}
+
+/*
+ * The CV download and the email reveal are shared components with fixed text, so their
+ * command comes from here. Must match LINK_CMD in code.ts. Generated content is part of the
+ * accessible name, so the name contains the visible text.
+ */
+.term-contact__cv .button::before {
+  content: 'curl -O cv.pdf · ';
+}
+
+.term-contact__email .button::before {
+  content: 'reveal email · ';
+}
+
+/* Form fields styled as prompts: "name:", "your email:" … */
+.term-contact .field label {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+.term-contact .field label::after {
+  content: ':';
+}
+
+.term-contact .field input,
+.term-contact .field textarea {
+  border-radius: 4px;
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Motion. Scroll scenes live in scene.ts (skipped under reduced motion). The boot screen      */
+/* plays once on first paint, so content is never shown and then hidden; it ends within 1 s.   */
+/* Its cursor blinks 3 times (2.4 s), then stays solid (WCAG 2.2.2).                           */
+/* ------------------------------------------------------------------------------------------ */
+
+@keyframes term-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+@keyframes term-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .term-window--boot .term-line {
+    animation: term-line-in 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  .term-window--boot .term-row:nth-child(2) .term-line {
+    animation-delay: 0.08s;
+  }
+
+  .term-window--boot .term-row:nth-child(3) .term-line {
+    animation-delay: 0.16s;
+  }
+
+  .term-window--boot .term-row:nth-child(4) .term-line {
+    animation-delay: 0.24s;
+  }
+
+  .term-window--boot .term-row:nth-child(5) .term-line {
+    animation-delay: 0.32s;
+  }
+
+  .term-window--boot .term-row:nth-child(6) .term-line {
+    animation-delay: 0.4s;
+  }
+
+  .term-window--boot .term-row:nth-child(n + 7) .term-line {
+    animation-delay: 0.48s;
+  }
+
+  .term-window--boot .term-cursor {
+    animation: term-blink 0.8s steps(1, end) 0.6s 3;
+  }
+}

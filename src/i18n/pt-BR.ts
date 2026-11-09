@@ -73,4 +73,10 @@ export const ptBR: Dictionary = {
   footer: {
     rights: '© {year} William Amaro Finardi. Todos os direitos reservados.',
   },
+  terminal: {
+    motd: 'Mensagem do dia',
+    deploying: 'Implantando rumo ao futuro',
+    openLinkedIn: 'Abrir LinkedIn',
+    openGitHub: 'Abrir GitHub',
+  },
 };

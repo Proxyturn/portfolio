@@ -14,6 +14,19 @@ the same change.
 | `react`, `react-dom` | 19.3.1  | UI framework (fixed decision).                                                                                                             | No transitive runtime dependencies.          |
 | `gsap`               | 3.15.1  | Scroll storytelling: tweens, timelines, `ScrollTrigger` (fixed decision). Free for commercial use, including all plugins, since GSAP 3.13. | Zero dependencies. Wrapped in `src/motion/`. |
 
+## Runtime: Terminal concept fonts (`concept/terminal` branch only)
+
+These two packages exist **only on the `concept/terminal` branch**. They are not on `main`.
+Approved by William on 2026-11-09 (storyboard question 3).
+
+| Package                               | Version | Why                                                                 | Notes                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------- | ------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@fontsource-variable/jetbrains-mono` | 5.3.0   | Terminal prompts, commands, headings and code (variable monospace). | SIL OFL 1.1. Self-hosted, no JavaScript, no dependencies. Only the Latin subset, upright, weight axis (`jetbrains-mono-latin-wght-normal.woff2`, 40.4 kB) is referenced, through our own `@font-face` in `src/concepts/terminal/fonts.css`; the package's own CSS (all subsets, italics) is not imported, so no other file is built or downloaded. |
+| `@fontsource-variable/ibm-plex-sans`  | 5.3.0   | Terminal paragraphs (variable sans), for readability.               | SIL OFL 1.1. Same approach: only `ibm-plex-sans-latin-wght-normal.woff2` (45.7 kB) is shipped (not the width-axis or italic files). Latin (U+0000-00FF plus punctuation) covers every EN and PT-BR character the site uses; `fonts.test.tsx` checks this against the rendered story.                                                               |
+
+Transfer cost for visitors: 86.1 kB of fonts in total (both files, already compressed WOFF2).
+The arrow (U+2192) is not in either Latin file, so the Terminal story draws it as SVG.
+
 ## Runtime: server only (`/api/contact` Vercel Function, never in the browser bundle)
 
 | Package              | Version | Why                                                                                                     | Notes                                                                                                 |
