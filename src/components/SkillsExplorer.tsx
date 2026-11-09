@@ -6,11 +6,16 @@ import { useLanguage } from '../i18n/context';
 
 const GROUPS: readonly SkillGroup[] = ['languages', 'frameworks', 'concepts'];
 
+interface Props {
+  /** Optional: told about every selection change, so a concept can mirror it visually. */
+  readonly onChange?: (skill: SkillId | null) => void;
+}
+
 /**
  * Filterable skills view: choosing a skill lists the jobs whose CV entry names it.
  * Concepts restyle it through the `.skills*` classes and theme tokens.
  */
-export function SkillsExplorer() {
+export function SkillsExplorer({ onChange }: Props = {}) {
   const { lang, dict } = useLanguage();
   const [selected, setSelected] = useState<SkillId | null>(null);
   const resultId = useId();
@@ -33,7 +38,9 @@ export function SkillsExplorer() {
                     aria-pressed={selected === skill.id}
                     aria-controls={resultId}
                     onClick={() => {
-                      setSelected((current) => (current === skill.id ? null : skill.id));
+                      const next = selected === skill.id ? null : skill.id;
+                      setSelected(next);
+                      onChange?.(next);
                     }}
                   >
                     {t(skill.name, lang)}

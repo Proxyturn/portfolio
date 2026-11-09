@@ -352,12 +352,23 @@ in English in both languages; see question 7.
 4. Option A: a neutral "Between worlds" panel.
 5. Terminal is dark only.
 6. Worlds uses fixed palettes per world.
-7. Terminal commands and code stay in English in PT-BR. Approval of the copy table itself is
-   to be confirmed (see the open point below).
+7. Terminal commands and code stay in English in PT-BR. Journey copy is approved (see
+   "William's answers on the Journey build" below); Terminal and Worlds copy is still to be
+   confirmed.
 8. OK to the recommendations: name "William Amaro Finardi" with the GitHub noreply address
    and "Keep my email addresses private". With his yes, create the public
    `Proxyturn/portfolio` repo and push, link Vercel, and turn off the preview toolbar.
    Pending: William runs `gh auth login` and `vercel login`.
 
-**Open point:** whether "recommended" in answer 7 also approves the new-copy table, with the
-first PT option where two are offered.
+## William's answers on the Journey build (2026-11-09)
+
+The critic approved the build first. Then William decided:
+
+1. **Journey copy approved:** the eight Journey rows of the new-copy table, EN and PT-BR as
+   listed. This closes the earlier open point on answer 7 for Journey. Terminal and Worlds
+   copy is still to be confirmed with their storyboards.
+2. **Mini-route labels:** "ATOS · client" for ATOS projects (for example "ATOS · Bradesco"),
+   so a client is never read as the employer. Other stops show the company.
+3. **Skills line on every stop:** keep it. "Now" also shows the stack as luggage tags.
+4. **CV download:** keep "Download CV (PDF)" as the link text, with "Take the map with you"
+   as the caption of a labelled group above it.

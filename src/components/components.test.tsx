@@ -48,6 +48,16 @@ describe('SkillsExplorer', () => {
     expect(screen.getByText(/não está ligada a um cargo específico/)).toBeInTheDocument();
   });
 
+  it('reports selection changes to an optional listener', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderWithLang(<SkillsExplorer onChange={onChange} />);
+    await user.click(screen.getByRole('button', { name: 'React' }));
+    await user.click(screen.getByRole('button', { name: 'Mendix' }));
+    await user.click(screen.getByRole('button', { name: 'Mendix' }));
+    expect(onChange.mock.calls).toEqual([['react'], ['mendix'], [null]]);
+  });
+
   it('groups every skill', () => {
     renderWithLang(<SkillsExplorer />);
     expect(screen.getAllByRole('button')).toHaveLength(cv.skills.length);

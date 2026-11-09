@@ -75,6 +75,8 @@ docs/DEPENDENCIES.md   every dependency and why
 - Animate through `useScrollScene()`. It skips setup under `prefers-reduced-motion` and
   reverts every tween and ScrollTrigger on unmount. Animate only `transform` and `opacity`, and
   leave the resting markup fully visible.
+- `src/motion/gsap.ts` turns GSAP lag smoothing off for the whole site, so animations run on
+  wall-clock time and content never stays half-revealed on slow devices.
 - Define the theme tokens listed in `src/theme/themes.ts` under `:root[data-theme='<id>']`.
 - Self-host any font (for example `@fontsource/*`). The CSP allows no external origins.
 

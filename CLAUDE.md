@@ -97,12 +97,12 @@ William's request
 ## Status
 
 - **Phase 0:** done.
-- **Phase 1** (foundation on `main`): **approved by William on 2026-11-09.** Not committed
-  yet: git identity is unknown, and `gh auth login` / `vercel login` are pending on
-  William's side.
+- **Phase 1** (foundation on `main`): **approved by William on 2026-11-09** and committed
+  locally (eabafcc) as William Amaro Finardi with his GitHub noreply address. Nothing is
+  pushed yet: `gh auth login` / `vercel login` are pending on William's side.
 - **Phase 2:** storyboards and the question batch for William are in `docs/STORYBOARDS.md`.
   Critic verdicts (2026-11-09, round 3): A storyboards APPROVED, B questions APPROVED, C
-  project setup APPROVED. Presented to William; answers recorded at the end of `docs/STORYBOARDS.md`. Storyboards are approved one by one. **Journey approved by William (2026-11-09)**; it is being built on `concept/journey`. Terminal and Worlds are not approved yet.
+  project setup APPROVED. Presented to William; answers recorded at the end of `docs/STORYBOARDS.md`. Storyboards are approved one by one. **Journey approved by William (2026-11-09)** and built on `concept/journey`. The critic approved the build; William's decisions on it (copy, labels, skills line, CV caption) are recorded at the end of `docs/STORYBOARDS.md`. Terminal and Worlds are not approved yet.
   An earlier pre-critic draft had been shown to him before the gate existed.
 
 ## Conventions (summary; details in README.md)
