@@ -3,6 +3,8 @@ name: CI
 on:
   push:
   pull_request:
+  # Manual run: gitleaks then scans the full git history, not just the pushed commits.
+  workflow_dispatch:
 
 # Least privilege: every job only reads the repository unless it says otherwise.
 permissions:

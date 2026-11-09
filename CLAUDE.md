@@ -98,8 +98,12 @@ William's request
 
 - **Phase 0:** done.
 - **Phase 1** (foundation on `main`): **approved by William on 2026-11-09** and committed
-  locally (eabafcc) as William Amaro Finardi with his GitHub noreply address. Nothing is
-  pushed yet: `gh auth login` / `vercel login` are pending on William's side.
+  (eabafcc) as William Amaro Finardi with his GitHub noreply address. Shared pieces from the
+  Journey build (SkillsExplorer `onChange`, ContactSection `cvLabel`, lag smoothing off) were
+  then added to `main` (3019a94), and `concept/journey` branches from that commit.
+- **Repo:** public at https://github.com/Proxyturn/portfolio since 2026-11-09, with `main`
+  (default) and `concept/journey` pushed and private vulnerability reporting on, with
+  William's yes. The Vercel import is in progress on William's side.
 - **Phase 2:** storyboards and the question batch for William are in `docs/STORYBOARDS.md`.
   Critic verdicts (2026-11-09, round 3): A storyboards APPROVED, B questions APPROVED, C
   project setup APPROVED. Presented to William; answers recorded at the end of `docs/STORYBOARDS.md`. Storyboards are approved one by one. **Journey approved by William (2026-11-09)** and built on `concept/journey`. The critic approved the build; William's decisions on it (copy, labels, skills line, CV caption) are recorded at the end of `docs/STORYBOARDS.md`. Terminal and Worlds are not approved yet.
