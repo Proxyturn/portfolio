@@ -1,0 +1,36 @@
+name: Preview checks
+
+# Vercel's GitHub integration reports each deployment as a GitHub deployment status.
+# When a preview (or production) deployment succeeds, check its headers and Lighthouse budgets.
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    if: github.event.deployment_status.state == 'success'
+    name: Headers + Lighthouse on ${{ github.event.deployment_status.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PREVIEW_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Security headers
+        run: npm run test:headers
+      # Lighthouse CI is run at an exact version via npx and kept out of package.json:
+      # its transitive dependencies carry advisories that would fail `npm audit` for the app.
+      - name: Lighthouse CI (mobile)
+        run: npx --yes @lhci/cli@0.16.0 autorun --collect.url="$PREVIEW_URL"
+        env:
+          LHCI_EXTRA_HEADERS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET && format('{{"x-vercel-protection-bypass":"{0}"}}', secrets.VERCEL_AUTOMATION_BYPASS_SECRET) || '{}' }}

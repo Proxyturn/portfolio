@@ -1,0 +1,10 @@
+dist
+coverage
+node_modules
+playwright-report
+test-results
+.lighthouseci
+.vercel
+package-lock.json
+public/cv/*.pdf
+PROMPT.md

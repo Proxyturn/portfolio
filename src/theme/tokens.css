@@ -1,0 +1,40 @@
+/*
+ * Base theme (used on main until a concept is chosen). Concepts define the same tokens
+ * under their own :root[data-theme='…'] selector. Token list: src/theme/themes.ts.
+ */
+:root,
+:root[data-theme='base'] {
+  color-scheme: light dark;
+  --color-bg: #fbfaf7;
+  --color-surface: #ffffff;
+  --color-text: #1b1d22;
+  --color-text-muted: #4d525c;
+  --color-accent: #1f5fbf;
+  --color-accent-contrast: #ffffff;
+  --color-border: #d9d6cf;
+  --color-focus: #1f5fbf;
+  --color-danger: #a8231b;
+  --color-success: #1d6b38;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: var(--font-body);
+  --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  --radius: 10px;
+  --space-gutter: clamp(16px, 4vw, 40px);
+  --max-width: 72rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-scheme='light']),
+  :root[data-theme='base']:not([data-color-scheme='light']) {
+    --color-bg: #121418;
+    --color-surface: #1b1e24;
+    --color-text: #eceae4;
+    --color-text-muted: #b3b6bd;
+    --color-accent: #8db4ff;
+    --color-accent-contrast: #0b1220;
+    --color-border: #343944;
+    --color-focus: #8db4ff;
+    --color-danger: #ff8f86;
+    --color-success: #7fd49b;
+  }
+}
