@@ -72,6 +72,16 @@ docs/DEPENDENCIES.md   every dependency and why
   hard-code copy.
 - Wrap each beat in `<ChapterSection id="…">`. Navigation, progress and tests rely on its
   `data-chapter` attribute.
+- Jumps (chapter nav, skills results, deep links, Back/forward) share one behavior from
+  `src/components/jump.ts`: native hash navigation, then focus on the target's heading. A
+  concept's own cards keep the jump contract: an `id` (`job-<id>` / `edu-<id>`) plus
+  `data-job` / `data-education`, and a heading with `tabIndex={-1}`. Any other element a link
+  should jump to gets `data-jump-target` (and ideally a `tabIndex={-1}` heading, visually
+  hidden if needed).
+- Every jump target stops at `scroll-margin-top: var(--jump-offset)`, where `--jump-offset` =
+  `--site-header-height` + `--jump-gap`. The header height is measured at runtime, so don't
+  hard-code it. A concept with taller sticky chrome (such as a map strip) adds its height to
+  `--jump-offset`.
 - Animate through `useScrollScene()`. It skips setup under `prefers-reduced-motion` and
   reverts every tween and ScrollTrigger on unmount. Animate only `transform` and `opacity`, and
   leave the resting markup fully visible.
