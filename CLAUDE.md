@@ -103,10 +103,23 @@ William's request
   then added to `main` (3019a94), and `concept/journey` branches from that commit.
 - **Repo:** public at https://github.com/Proxyturn/portfolio since 2026-11-09, with `main`
   (default) and `concept/journey` pushed and private vulnerability reporting on, with
-  William's yes. The Vercel import is in progress on William's side.
+  William's yes. Vercel is connected through its GitHub app; each branch gets a preview
+  (`portfolio-git-<branch>-proxyturn.vercel.app`), and Vercel Authentication on previews is
+  off (William, 2026-11-09), and so is the Vercel Toolbar. Production is
+  https://portfolio-bice-two-69.vercel.app. The contact-form env vars are still to do.
 - **Phase 2:** storyboards and the question batch for William are in `docs/STORYBOARDS.md`.
   Critic verdicts (2026-11-09, round 3): A storyboards APPROVED, B questions APPROVED, C
-  project setup APPROVED. Presented to William; answers recorded at the end of `docs/STORYBOARDS.md`. Storyboards are approved one by one. **Journey approved by William (2026-11-09)** and built on `concept/journey`. The critic approved the build; William's decisions on it (copy, labels, skills line, CV caption) are recorded at the end of `docs/STORYBOARDS.md`. Terminal and Worlds are not approved yet.
+  project setup APPROVED. Presented to William; answers recorded at the end of
+  `docs/STORYBOARDS.md`. Storyboards are approved one by one.
+  - **Journey:** approved by William (2026-11-09) and built on `concept/journey`. The critic
+    approved the build; William's decisions on it (copy, labels, skills line, CV caption) are
+    recorded at the end of `docs/STORYBOARDS.md`.
+  - **Terminal:** approved by William (2026-11-09), copy included; being built on
+    `concept/terminal`.
+  - **Worlds:** not approved yet. At William's request it now has a clickable-world version 2
+    (section 3), with the first version kept as 3b for comparison. He chooses between them
+    (question W1).
+
   An earlier pre-critic draft had been shown to him before the gate existed.
 
 ## Conventions (summary; details in README.md)
