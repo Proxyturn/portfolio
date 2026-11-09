@@ -163,7 +163,12 @@ test('scrolling ahead of a slow scene download never leaves stops hidden', async
     await held;
     await route.continue();
   });
-  await visit(page);
+  // Firefox delays the `load` event until the held chunk arrives, so wait for the DOM only.
+  await page.addInitScript(() => {
+    window.localStorage.setItem('portfolio.lang', 'en');
+  });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-chapter="hook"]')).toBeVisible();
   await page.locator('#toolbox').scrollIntoViewIfNeeded();
   release();
   // The scene has run once it drives the road mask.
