@@ -1,12 +1,7 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { cv, visit } from './helpers';
 
-const pdfOnDisk = existsSync(join(import.meta.dirname, '..', 'public', cv.identity.cvPath));
-
 test('CV download link serves a PDF', async ({ page, request }) => {
-  test.skip(!pdfOnDisk, 'Sanitized CV PDF not added to public/cv/ yet (pending from William).');
   await visit(page);
   const link = page.getByRole('link', { name: 'Download CV (PDF)' });
   await expect(link).toHaveAttribute('href', cv.identity.cvPath);

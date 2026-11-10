@@ -30,7 +30,10 @@ reproduce it, and the impact you expect. You'll get an acknowledgement as soon a
 - **Secrets:** only in Vercel environment variables, never with a `VITE_` prefix. `.env*`
   files are ignored by git, and gitleaks scans every push.
 - **Privacy:** no analytics, tracking or cookies. Phone number and age are
-  blocked from the source, the build and the CV by an automated scan.
+  blocked from the source, the build and the CV by an automated scan. Its exact values come
+  from the `PRIVACY_DENYLIST` secret, kept as both an Actions and a Dependabot secret; CI
+  fails without it, except on pull requests from forks. The email is public and linked from
+  the CV PDF, so it is never part of that denylist.
 - **Supply chain:** committed lockfile with `npm ci`, `npm audit --audit-level=high` in CI,
   Dependabot for npm and GitHub Actions, actions pinned to commit SHAs with least-privilege
   permissions, and CodeQL analysis.
