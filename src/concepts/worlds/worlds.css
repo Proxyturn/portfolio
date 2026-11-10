@@ -3,10 +3,10 @@
  * light/dark setting (answer 6). The root uses the neutral row; `html:root[...]` outranks the
  * base dark-mode override in tokens.css.
  *
- * Layout gates (keep in sync with STICKY_QUERY in useMediaQuery.ts):
- * - split: ≥ 1024 px wide and ≥ 600 px tall, map stage left (60%), panels right (40%)
- * - strip: 768–1023 px wide and ≥ 600 px tall, map strip on top (40% of the height)
- * - overview: everything else, the whole map once at the top (portrait arrangement)
+ * Layout gates (keep in sync with useMediaQuery.ts). Each keeps whole-world labels ≥ 12 px:
+ * - split: ≥ 1024 wide and ≥ 600 tall: map stage left (60%), hook and chapters right (40%)
+ * - strip: 768–1023 wide and ≥ 760 tall: map after the hook, then a sticky strip (40% tall)
+ * - overview: everything else: the map once, after the hook (wide or portrait arrangement)
  */
 html:root[data-theme='worlds'] {
   color-scheme: light;
@@ -20,8 +20,10 @@ html:root[data-theme='worlds'] {
   --color-focus: #2e54a3;
   --color-danger: #a8231b;
   --color-success: #1d6b38;
-  --font-body: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-  --font-display: 'Space Grotesk Variable', var(--font-body);
+  --font-body:
+    'Inter Variable', 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, Arial,
+    sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk Fallback', var(--font-body);
   --radius: 12px;
   --map-land: #e4ded2;
 }
@@ -124,6 +126,11 @@ html:root[data-theme='worlds'] {
 
 /* ---------- Layout ---------- */
 
+/*
+ * Reading order in every layout: hook (name, intro), map, chapters. In the overview the map
+ * follows the hook as it is (William, 2026-11-10); in the strip it follows the hook and then
+ * sticks under the header; in the split layout the grid puts it in the left column.
+ */
 .worlds__stage {
   background: var(--map-land);
   padding: 1rem var(--space-gutter);
@@ -133,6 +140,11 @@ html:root[data-theme='worlds'] {
   position: relative;
   max-width: 26rem;
   margin: 0 auto;
+}
+
+/* The wide arrangement as the overview map (wide but short screens). */
+.worlds-map--wide {
+  max-width: 72rem;
 }
 
 .worlds-map__viewport {
@@ -163,7 +175,10 @@ html:root[data-theme='worlds'] {
   margin-bottom: 1.25rem;
 }
 
-/* The district name is visible text above the chapter heading. */
+/*
+ * The district name is visible text above the chapter heading (CSS order for now; it moves
+ * before the heading in the DOM once ChapterSection's `eyebrow` prop lands on main).
+ */
 .worlds-district {
   order: -1;
   margin: 0 0 0.4rem;
@@ -173,6 +188,16 @@ html:root[data-theme='worlds'] {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   font-size: 0.85rem;
+}
+
+/* Overview only: each chapter opens with a small static picture of its district. */
+.worlds-vignette {
+  order: -2;
+  display: block;
+  width: auto;
+  max-width: min(100%, 22rem);
+  height: auto;
+  margin: 0 0 1rem;
 }
 
 .worlds-entries {
@@ -190,8 +215,11 @@ html:root[data-theme='worlds'] {
   font-weight: 600;
 }
 
-@media (min-width: 768px) and (min-height: 600px) {
-  .worlds-back {
+/* Both sticky layouts: the stage holds the camera; no vignettes, no Back links. */
+@media (min-width: 1024px) and (min-height: 600px),
+  (min-width: 768px) and (max-width: 1023.98px) and (min-height: 760px) {
+  .worlds-back,
+  .worlds-vignette {
     display: none;
   }
 
@@ -201,7 +229,8 @@ html:root[data-theme='worlds'] {
     padding: 0;
   }
 
-  .worlds-map {
+  .worlds-map,
+  .worlds-map--wide {
     max-width: none;
     height: 100%;
   }
@@ -219,6 +248,7 @@ html:root[data-theme='worlds'] {
   }
 }
 
+/* Split: the map stage on the left (60%), the hook and chapters on the right (40%). */
 @media (min-width: 1024px) and (min-height: 600px) {
   .worlds {
     display: grid;
@@ -226,13 +256,26 @@ html:root[data-theme='worlds'] {
     align-items: start;
   }
 
+  .worlds__intro {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .worlds__panels {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
   .worlds__stage {
+    grid-column: 1;
+    grid-row: 1 / span 2;
     height: calc(100vh - var(--site-header-height));
     height: calc(100svh - var(--site-header-height));
   }
 }
 
-@media (min-width: 768px) and (max-width: 1023.98px) and (min-height: 600px) {
+/* Strip: the map after the hook, then stuck under the header at 40% of the height. */
+@media (min-width: 768px) and (max-width: 1023.98px) and (min-height: 760px) {
   html:root[data-theme='worlds'] {
     --map-strip-height: 40svh;
     --jump-offset: calc(var(--site-header-height) + var(--map-strip-height) + var(--jump-gap));
@@ -455,4 +498,91 @@ html:root[data-theme='worlds'] {
   fill: var(--d-text);
   font-family: var(--font-display);
   font-weight: 600;
+}
+
+.wb-window {
+  fill: var(--d-bg);
+}
+
+/* The truck's route: a MotionPath guide, never painted. */
+.wb-hidden {
+  fill: none;
+  stroke: none;
+}
+
+/* ---------- Detail layer, halos, fades ---------- */
+
+.worlds-details {
+  pointer-events: none;
+}
+
+.worlds-wire {
+  fill: none;
+  stroke: var(--d-muted);
+  stroke-width: 3;
+  stroke-dasharray: 2 6;
+  stroke-linecap: round;
+}
+
+/*
+ * The scene marks the district the camera has arrived at; the other districts' decor fades
+ * back a little. Buildings, labels, signs and the pin never fade, so their contrast holds.
+ */
+.worlds-details [data-detail] {
+  transition: opacity 0.4s ease-out;
+}
+
+.worlds-map__svg[data-active]:not([data-active~='arrival']) [data-detail='arrival'],
+.worlds-map__svg[data-active]:not([data-active~='industrial']) [data-detail='industrial'],
+.worlds-map__svg[data-active]:not([data-active~='banking']) [data-detail='banking'],
+.worlds-map__svg[data-active]:not([data-active~='between']) [data-detail='between'],
+.worlds-map__svg[data-active]:not([data-active~='energy']) [data-detail='energy'],
+.worlds-map__svg[data-active]:not([data-active~='corporate']) [data-detail='corporate'],
+.worlds-map__svg[data-active]:not([data-active~='cement']) [data-detail='cement'],
+.worlds-map__svg[data-active]:not([data-active~='ai']) [data-detail='ai'] {
+  opacity: 0.35;
+}
+
+/* Toolbox: the buildings whose job used the chosen skill (accent, ≥ 3:1 on its ground). */
+.worlds-halo {
+  fill: none;
+  stroke: var(--d-accent);
+  stroke-width: 6;
+  stroke-dasharray: 14 8;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+[data-halo] .worlds-halo {
+  opacity: 1;
+}
+
+/* ---------- The AI frontier's four signs (Next panel) ---------- */
+
+.worlds-signs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.worlds-signs__sign {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem 0.9rem;
+  border: 2px solid var(--color-accent);
+  border-radius: calc(var(--radius) / 1.5);
+}
+
+.worlds-signs__badge {
+  align-self: flex-start;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: 0.8rem;
+  font-weight: 700;
 }

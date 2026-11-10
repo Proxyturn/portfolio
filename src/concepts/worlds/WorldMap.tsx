@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type FocusEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FocusEvent } from 'react';
 import { useLanguage } from '../../i18n/context';
 import { Drawing } from './Drawings';
 import {
@@ -7,14 +7,21 @@ import {
   estimateTextWidth,
   labelLines,
   linkGeometry,
+  signLayout,
   type Arrangement,
+  type BuildingId,
 } from './world';
 
 export const WORLD_MAP_ID = 'world-map';
 const TITLE_ID = 'world-map-title';
 
+/** Decor, power line, pin and signs: loaded after first paint. */
+const Details = lazy(() => import('./Details'));
+
 interface Props {
   readonly arrangement: Arrangement;
+  /** Buildings whose job uses the skill chosen in the Toolbox: they get a halo. */
+  readonly highlighted?: ReadonlySet<BuildingId>;
   /** Told when keyboard focus enters (true) or leaves (false) the map. */
   readonly onKeyboardFocus?: (inside: boolean) => void;
 }
@@ -45,7 +52,7 @@ function measureText(text: SVGTextElement | null): number | null {
  * focus lift is a CSS transform on an inner group (they never share an element). No `style`
  * attributes anywhere (CSP `style-src 'self'`).
  */
-export function WorldMap({ arrangement, onKeyboardFocus }: Props) {
+export function WorldMap({ arrangement, highlighted, onKeyboardFocus }: Props) {
   const { lang, dict } = useLanguage();
   const texts = useRef<(SVGTextElement | null)[]>([]);
   const [measured, setMeasured] = useState<{ key: string; widths: (number | null)[] } | null>(null);
@@ -57,18 +64,23 @@ export function WorldMap({ arrangement, onKeyboardFocus }: Props) {
     setMeasured({ key, widths: texts.current.map(measureText) });
   }, [key]);
 
-  // Chips fit their text: measure after render and again once the web font has loaded.
-  useLayoutEffect(() => {
-    measure();
+  // Chips fit their text. The first paint uses estimated widths; the real ones are measured
+  // once the web font is in, in a frame of their own: measuring during the first commit forced
+  // a full synchronous layout inside the page's longest task (Lighthouse TBT, measured).
+  useEffect(() => {
     let active = true;
-    // jsdom has no FontFaceSet.
-    if ('fonts' in document) {
-      void document.fonts.ready.then(() => {
+    let frame = 0;
+    const later = () => {
+      frame = requestAnimationFrame(() => {
         if (active) measure();
       });
-    }
+    };
+    // jsdom has no FontFaceSet.
+    if ('fonts' in document) void document.fonts.ready.then(later);
+    else measure();
     return () => {
       active = false;
+      cancelAnimationFrame(frame);
     };
   }, [measure]);
 
@@ -115,24 +127,28 @@ export function WorldMap({ arrangement, onKeyboardFocus }: Props) {
                     height={ground.rect.h}
                     rx="18"
                   />
-                  {ground.sign && (
-                    <text
-                      className="worlds-sign"
-                      x={ground.rect.x + 14}
-                      y={ground.rect.y + arrangement.signSize + 10}
-                      fontSize={arrangement.signSize}
-                    >
-                      {dict.worlds.districts[ground.sign]}
-                    </text>
-                  )}
+                  {ground.sign &&
+                    signLayout(ground, dict.worlds.districts[ground.sign], arrangement).sign && (
+                      <text
+                        className="worlds-sign"
+                        x={ground.rect.x + 14}
+                        y={ground.rect.y + arrangement.signSize + 8}
+                        fontSize={arrangement.signSize}
+                      >
+                        {dict.worlds.districts[ground.sign]}
+                      </text>
+                    )}
                 </g>
               ))}
             </g>
+            <Suspense fallback={null}>
+              <Details arrangement={arrangement} />
+            </Suspense>
             <g role="list" className="worlds-buildings">
               {BUILDINGS.map((building, i) => {
                 const label = labels[i] ?? '';
                 const spot = arrangement.places[building.id];
-                const lines = labelLines(label, spot.wrap);
+                const lines = labelLines(label, arrangement.maxChars);
                 const fresh = measured?.key === key ? measured.widths[i] : null;
                 const textWidth =
                   fresh ??
@@ -145,6 +161,7 @@ export function WorldMap({ arrangement, onKeyboardFocus }: Props) {
                     className={`worlds-building wd-${building.district}`}
                     transform={`translate(${spot.x} ${spot.y})`}
                     data-building={building.id}
+                    data-halo={highlighted?.has(building.id) ? '' : undefined}
                   >
                     <a href={building.href} className="worlds-link">
                       <rect
@@ -163,6 +180,13 @@ export function WorldMap({ arrangement, onKeyboardFocus }: Props) {
                         height={geo.hit.h - 6}
                         rx="12"
                       />
+                      <ellipse
+                        className="worlds-halo"
+                        cx={geo.halo.x + geo.halo.w / 2}
+                        cy={geo.halo.y + geo.halo.h / 2}
+                        rx={geo.halo.w / 2}
+                        ry={geo.halo.h / 2}
+                      />
                       <g className="worlds-lift">
                         <Drawing id={building.id} scale={arrangement.drawingScale} />
                       </g>
@@ -172,7 +196,7 @@ export function WorldMap({ arrangement, onKeyboardFocus }: Props) {
                         y={geo.chip.y}
                         width={geo.chip.w}
                         height={geo.chip.h}
-                        rx={geo.chip.h / 2 > 18 ? 12 : geo.chip.h / 2}
+                        rx={Math.min(12, geo.chip.h / 2)}
                       />
                       <text
                         ref={(el) => {

@@ -80,6 +80,7 @@ export const ptBR: Dictionary = {
     startExploring: 'Comece a explorar',
     worldMap: 'Mapa do mundo',
     backToMap: 'Voltar ao mapa',
+    youAreHere: 'Você está aqui',
     districts: {
       industrial: 'Distrito industrial',
       banking: 'Distrito bancário',
@@ -91,7 +92,7 @@ export const ptBR: Dictionary = {
       workshop: 'Oficina',
       postOffice: 'Correio',
     },
-    /** PENDING William's OK (shown with the spike). */
+    /** Map labels approved by William on 2026-11-10 (with the spike). */
     mapLabels: {
       betweenWorldsAtos: 'Entre mundos · ATOS',
       computerScience: 'Ciência da Computação · UniRitter',

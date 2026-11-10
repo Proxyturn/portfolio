@@ -50,7 +50,17 @@ export function WorldsJob({
   );
 }
 
-export function WorldsEducation({ entry }: { readonly entry: Education }) {
+/**
+ * `signs`: the topics are shown as signs, each marked "In progress" (the AI frontier's four
+ * signs, beat 7). Only for an entry still in progress.
+ */
+export function WorldsEducation({
+  entry,
+  signs = false,
+}: {
+  readonly entry: Education;
+  readonly signs?: boolean;
+}) {
   const { lang, dict } = useLanguage();
   const status = entry.graduated
     ? format(dict.story.graduated, { date: formatYearMonth(entry.graduated, lang) })
@@ -61,13 +71,23 @@ export function WorldsEducation({ entry }: { readonly entry: Education }) {
       <p className="worlds-card__meta">
         {entry.institution} · {status}
       </p>
-      {entry.topics && (
-        <ul>
-          {entry.topics.map((topic) => (
-            <li key={topic.en}>{t(topic, lang)}</li>
-          ))}
-        </ul>
-      )}
+      {entry.topics &&
+        (signs && entry.inProgress ? (
+          <ul className="worlds-signs">
+            {entry.topics.map((topic) => (
+              <li key={topic.en} className="worlds-signs__sign">
+                <span>{t(topic, lang)}</span>{' '}
+                <span className="worlds-signs__badge">{dict.story.inProgress}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ul>
+            {entry.topics.map((topic) => (
+              <li key={topic.en}>{t(topic, lang)}</li>
+            ))}
+          </ul>
+        ))}
     </article>
   );
 }

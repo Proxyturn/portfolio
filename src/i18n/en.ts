@@ -83,6 +83,7 @@ export const en = {
     startExploring: 'Start exploring',
     worldMap: 'World map',
     backToMap: 'Back to the map',
+    youAreHere: 'You are here',
     districts: {
       industrial: 'Industrial district',
       banking: 'Banking district',
@@ -94,7 +95,7 @@ export const en = {
       workshop: 'Workshop',
       postOffice: 'Post office',
     },
-    /** PENDING William's OK (shown with the spike): the two map labels added after W3. */
+    /** Map labels approved by William on 2026-11-10 (with the spike). */
     mapLabels: {
       betweenWorldsAtos: 'Between worlds · ATOS',
       computerScience: 'Computer Science · UniRitter',
