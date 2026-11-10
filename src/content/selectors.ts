@@ -1,4 +1,5 @@
 import { cv } from './cv';
+import { emailFromParts } from './email';
 import type { ChapterId, Job, Lang, Localized, SkillId, YearMonth } from './types';
 
 /** Picks the string for the active language. */
@@ -6,11 +7,9 @@ export function t(text: Localized, lang: Lang): string {
   return text[lang];
 }
 
-const reverse = (value: string): string => value.split('').reverse().join('');
-
 /** Builds the email address at runtime only, so it never sits in markup as plain text. */
 export function assembleEmail(parts = cv.identity.emailParts): string {
-  return `${reverse(parts.userReversed)}@${reverse(parts.domainReversed)}`;
+  return emailFromParts(parts);
 }
 
 export function jobsForChapter(chapter: ChapterId, jobs: readonly Job[] = cv.jobs): Job[] {
