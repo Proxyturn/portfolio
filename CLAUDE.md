@@ -126,13 +126,15 @@ William's request
   - **Journey:** approved by William (2026-11-09) and built on `concept/journey`. The critic
     approved the build; William's decisions on it (copy, labels, skills line, CV caption) are
     recorded at the end of `docs/STORYBOARDS.md`.
-  - **Terminal:** approved by William (2026-11-09), copy included; being built on
-    `concept/terminal`.
+  - **Terminal:** approved by William (2026-11-09), copy included; built on
+    `concept/terminal`, critic-approved, and pushed with its Vercel preview (2026-11-10).
   - **Worlds:** version 2, the clickable world (section 3), approved by William (2026-11-09).
     The shared jump behavior lands on `main` first, then a spike goes to the critic and to
     William before the full build on `concept/worlds`. Version 3b is kept only as a record.
     Spike reviewed; William's answers (2026-11-10) are at the end of `docs/STORYBOARDS.md`:
-    copy approved, hook first on phones, labels at least about 12 px.
+    copy approved, hook first on phones, labels at least about 12 px. Full build in progress;
+    William's answers on it (12 px district signs, hook first in every layout) are recorded
+    there too.
 
 ## Conventions (summary; details in README.md)
 

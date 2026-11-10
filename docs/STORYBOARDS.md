@@ -226,8 +226,9 @@ only when the viewport is at least 768 px wide **and** at least 600 px tall. Lan
 
 - **≥ 1024 px wide, ≥ 600 px tall:** the map is a sticky stage on the left (about 60% of the
   width), and the camera moves as you scroll. The panels scroll on the right (about 40%).
-- **768–1023 px wide, ≥ 760 px tall** (raised from 600 for the 12 px label floor; see the 2026-11-10 answers)**:** the map is a sticky strip at the top (about 40% of the
-  height), with the same camera. The panels scroll below it, and every jump target's scroll
+- **768–1023 px wide, ≥ 760 px tall** (raised from 600 for the 12 px label floor; see the
+  2026-11-10 answers): the map is a sticky strip at the top (about 40% of the height), with
+  the same camera. The panels scroll below it, and every jump target's scroll
   margin includes the strip (see "One shared jump behavior").
 - **Everything else (phones, short screens):** no sticky stage, no camera and no ambient
   touches. The whole map appears once, as an overview at the top, and tapping a building
