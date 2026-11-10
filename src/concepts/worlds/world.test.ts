@@ -179,9 +179,18 @@ describe('arrangements', () => {
         return r % 2 === 0 ? row : row.reverse();
       });
       expect(read, arrangement.id).toEqual(story);
-      // The road starts top left and ends beside the last row, at the end it is read from.
+      // The road starts top left and ends along the bottom margin beside the arrival, the
+      // last ground in the last row's reading direction.
       expect(arrangement.road, arrangement.id).toMatch(/^M8 8V/);
-      expect(arrangement.road.endsWith(`V${arrangement.height - 8}`)).toBe(true);
+      const arrival = arrangement.grounds.find((g) => g.id === 'arrival');
+      if (!arrival) throw new Error('No arrival ground');
+      const endX = arrival.rect.x === 16 ? 8 : arrangement.width - 8;
+      expect(
+        arrival.rect.x === 16 || arrival.rect.x + arrival.rect.w === arrangement.width - 16,
+      ).toBe(true);
+      expect(arrangement.road.endsWith(`V${arrangement.height - 8}H${endX}`), arrangement.id).toBe(
+        true,
+      );
     }
   });
 

@@ -553,7 +553,17 @@ test.describe('jumps', () => {
       await page.goto('/#world-map');
       await expect(page.locator('#world-map')).toBeAttached();
       await expect(page.locator('#world-map-title')).toBeFocused();
-      await page.waitForTimeout(500);
+      // Sample only once the page has settled: load and web fonts in, then a frame (a late
+      // realign after either is legitimate; a fight would keep moving afterwards).
+      await page.evaluate(async () => {
+        if (document.readyState !== 'complete') {
+          await new Promise((resolve) => {
+            window.addEventListener('load', resolve, { once: true });
+          });
+        }
+        await document.fonts.ready;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
       expect(await scrollSamples(page, 1500)).toHaveLength(1);
       const stage = await page.evaluate(() => ({
         top: document.querySelector('.worlds__stage')?.getBoundingClientRect().top ?? -1,

@@ -424,15 +424,17 @@ function buildLandscape(id: 'square' | 'wide', spec: RowSpec): Arrangement {
   const height = MARGIN * 2 + spec.rows.length * groundH + (spec.rows.length - 1) * ROW_GAP;
   // The road snakes in story order: down the left edge beside the first row, along each gap
   // between rows (left to right under even rows, right to left under odd ones), down the edge
-  // where it turns, and finally down beside the last row. Each row is read in the direction
-  // of the road beneath or beside it, so the drawing follows the story (arrival last).
+  // where it turns, down beside the last row, and along the bottom margin under the last row
+  // in its reading direction, so it ends beside the arrival. Each row is read in the direction
+  // of the road beneath it, so the drawing follows the story (arrival last).
   const gapY = (r: number) => MARGIN + (r + 1) * (groundH + ROW_GAP) - ROW_GAP / 2;
   const edge = (right: boolean) => (right ? width - MARGIN / 2 : MARGIN / 2);
   const segments: string[] = [`M${edge(false)} ${MARGIN / 2}`];
   for (let r = 0; r < spec.rows.length - 1; r++) {
     segments.push(`V${gapY(r)}`, `H${edge(r % 2 === 0)}`);
   }
-  segments.push(`V${height - MARGIN / 2}`);
+  const last = spec.rows.length - 1;
+  segments.push(`V${height - MARGIN / 2}`, `H${edge(last % 2 === 0)}`);
   return {
     id,
     width,
