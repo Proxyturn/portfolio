@@ -73,7 +73,8 @@ docs/DEPENDENCIES.md   every dependency and why
 - Read CV text only from `src/content/cv.ts` and UI strings only from `src/i18n/`. Never
   hard-code copy.
 - Wrap each beat in `<ChapterSection id="…">`. Navigation, progress and tests rely on its
-  `data-chapter` attribute.
+  `data-chapter` attribute. Its optional `eyebrow` prop renders a short label
+  (`.chapter__eyebrow`) before the chapter heading, so it is read first; style it in the concept.
 - Jumps (chapter nav, skills results, deep links, Back/forward) share one behavior from
   `src/components/jump.ts`: native hash navigation, then focus on the target's heading. A
   concept's own cards keep the jump contract: an `id` (`job-<id>` / `edu-<id>`) plus

@@ -226,8 +226,9 @@ only when the viewport is at least 768 px wide **and** at least 600 px tall. Lan
 
 - **≥ 1024 px wide, ≥ 600 px tall:** the map is a sticky stage on the left (about 60% of the
   width), and the camera moves as you scroll. The panels scroll on the right (about 40%).
-- **768–1023 px wide, ≥ 600 px tall:** the map is a sticky strip at the top (about 40% of the
-  height), with the same camera. The panels scroll below it, and every jump target's scroll
+- **768–1023 px wide, ≥ 760 px tall** (raised from 600 for the 12 px label floor; see the
+  2026-11-10 answers): the map is a sticky strip at the top (about 40% of the height), with
+  the same camera. The panels scroll below it, and every jump target's scroll
   margin includes the strip (see "One shared jump behavior").
 - **Everything else (phones, short screens):** no sticky stage, no camera and no ambient
   touches. The whole map appears once, as an overview at the top, and tapping a building
@@ -671,6 +672,42 @@ The critic approved the build first. Then William decided:
 3. **Next steps:** the shared jump behavior lands on `main` first, then a spike (sticky stage,
    camera, focus, jump, Lighthouse on mobile) goes through the critic and to William before
    the full build on `concept/worlds`.
+
+## William's answers on the Worlds spike (2026-11-10)
+
+The critic approved the spike summary (round 3). William answered "Yes, recommended" to all
+three questions:
+
+1. **Copy:** the map labels "Between worlds · ATOS" / "Entre mundos · ATOS" and "Computer
+   Science · UniRitter" / "Ciência da Computação · UniRitter" are approved. The Portuguese
+   first options are confirmed: "Seis distritos, um desenvolvedor", "Distrito …" and
+   "Correio". "Six districts, one developer" is a small line above the name; the name
+   stays the page's main heading.
+2. **Phones and short screens (overview layout):** the hook text (name and intro) comes
+   first, then the map. This changes section 3's "overview at the top".
+3. **Labels:** a minimum of about 12 px wherever the whole map is shown (strip and the
+   1024-wide side-by-side layout included), through bigger labels and/or a wider map
+   arrangement; where 12 px still can't be met, the overview map is used instead.
+
+## William's answers on the full Worlds build (2026-11-10)
+
+The critic reviewed the full build. William answered "Yes, recommended" to both questions:
+
+1. **District signs on the map** (decorative; each name is also shown above its chapter) follow
+   the same ~12 px minimum as the labels wherever the whole map is shown. Where a sign can't fit
+   at that size, it is left off that map arrangement.
+2. **Reading order:** the hook (name and intro) comes first, then the map, in every layout,
+   including the 768–1023 px strip, which then sticks at the top as you scroll.
+
+**As built (updates section 3):**
+
+- The strip needs at least 760 px of height (was 600). Shorter screens 768–1023 px wide get the
+  overview, which uses a wide arrangement from 820 px wide and a portrait one below that.
+- Three map arrangements (square for the split layout, wide, portrait); labels may wrap onto up
+  to three lines, and the accessible name stays exactly the label.
+- The "You are here" pin sits under the SEMANTIX label. On the map, the four "In progress"
+  signs are small boards without text; the four topics, each marked "In progress", are in the
+  Next chapter.
 
 ## Questions for William on Worlds version 2 (2026-11-09, answered above)
 
