@@ -1,18 +1,19 @@
 import { useLayoutEffect } from 'react';
-import { handleHashChange, handleJumpClick, jumpToHashOnLoad, trackHeaderHeight } from './jump';
+import { handleHashChange, handleJumpClick, installDeepLink, trackHeaderHeight } from './jump';
 
 /**
  * Installs the shared jump behavior once, in the app shell: focus follows every in-page link
  * to a jump target and every Back/forward to one, and a deep link in the URL is honoured after
- * the story has rendered. A layout effect, so a deep link lands before the first paint (no
- * flash of the top).
+ * the story has rendered and kept while the page finishes loading (`settleDeepLink`). A layout
+ * effect, so a deep link lands before the first paint (no flash of the top).
  */
 export function useJumpNavigation(): void {
   useLayoutEffect(() => {
-    jumpToHashOnLoad();
+    const stopDeepLink = installDeepLink();
     document.addEventListener('click', handleJumpClick, true);
     window.addEventListener('hashchange', handleHashChange);
     return () => {
+      stopDeepLink();
       document.removeEventListener('click', handleJumpClick, true);
       window.removeEventListener('hashchange', handleHashChange);
     };
