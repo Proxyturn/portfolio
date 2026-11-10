@@ -14,6 +14,18 @@ the same change.
 | `react`, `react-dom` | 19.3.1  | UI framework (fixed decision).                                                                                                             | No transitive runtime dependencies.          |
 | `gsap`               | 3.15.1  | Scroll storytelling: tweens, timelines, `ScrollTrigger` (fixed decision). Free for commercial use, including all plugins, since GSAP 3.13. | Zero dependencies. Wrapped in `src/motion/`. |
 
+## Runtime: Worlds concept fonts (`concept/worlds` branch only)
+
+These two packages exist **only on the `concept/worlds` branch**. They are not on `main`.
+Approved by William on 2026-11-09 (storyboard question 3).
+
+| Package                              | Version | Why                                                       | Notes                                                                                                                                                                                                                                                                                         |
+| ------------------------------------ | ------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@fontsource-variable/space-grotesk` | 5.3.0   | Worlds headings and map labels (variable geometric sans). | SIL OFL 1.1. Self-hosted, no JavaScript, no dependencies. Only the Latin subset, upright, weight axis (`space-grotesk-latin-wght-normal.woff2`, 22.3 kB) is referenced, through our own `@font-face` in `src/concepts/worlds/fonts.css`; the package's own CSS (all subsets) is not imported. |
+| `@fontsource-variable/inter`         | 5.3.0   | Worlds body text (variable sans).                         | SIL OFL 1.1. Same approach: only `inter-latin-wght-normal.woff2` (48.3 kB) is shipped. Latin (U+0000-00FF plus punctuation) covers every EN and PT-BR character the site uses.                                                                                                                |
+
+Transfer cost for visitors: 70.5 kB of fonts in total (both files, already compressed WOFF2).
+
 ## Runtime: server only (`/api/contact` Vercel Function, never in the browser bundle)
 
 | Package              | Version | Why                                                                                                     | Notes                                                                                                 |

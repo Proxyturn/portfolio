@@ -5,9 +5,9 @@
  */
 import type { ComponentType } from 'react';
 import type { ThemeId } from '../theme/themes';
-import { BaseStory } from './base/BaseStory';
+import { WorldsStory } from './worlds/WorldsStory';
 
 export const activeConcept: { readonly theme: ThemeId; readonly Story: ComponentType } = {
-  theme: 'base',
-  Story: BaseStory,
+  theme: 'worlds',
+  Story: WorldsStory,
 };

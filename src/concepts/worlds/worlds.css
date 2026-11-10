@@ -1,0 +1,458 @@
+/*
+ * Worlds (version 2, the clickable world). Fixed palettes per district, ignoring the OS
+ * light/dark setting (answer 6). The root uses the neutral row; `html:root[...]` outranks the
+ * base dark-mode override in tokens.css.
+ *
+ * Layout gates (keep in sync with STICKY_QUERY in useMediaQuery.ts):
+ * - split: ≥ 1024 px wide and ≥ 600 px tall, map stage left (60%), panels right (40%)
+ * - strip: 768–1023 px wide and ≥ 600 px tall, map strip on top (40% of the height)
+ * - overview: everything else, the whole map once at the top (portrait arrangement)
+ */
+html:root[data-theme='worlds'] {
+  color-scheme: light;
+  --color-bg: #f5f3ef;
+  --color-surface: #ffffff;
+  --color-text: #1d1f24;
+  --color-text-muted: #4f535b;
+  --color-accent: #2e54a3;
+  --color-accent-contrast: #ffffff;
+  --color-border: #7d828b;
+  --color-focus: #2e54a3;
+  --color-danger: #a8231b;
+  --color-success: #1d6b38;
+  --font-body: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: 'Space Grotesk Variable', var(--font-body);
+  --radius: 12px;
+  --map-land: #e4ded2;
+}
+
+/* District palettes (3b table). Mirrored in world.ts PALETTES. */
+.wd-neutral {
+  --d-bg: #f5f3ef;
+  --d-surface: #ffffff;
+  --d-text: #1d1f24;
+  --d-muted: #4f535b;
+  --d-accent: #2e54a3;
+  --d-accent-contrast: #ffffff;
+  --d-scheme: light;
+}
+
+.wd-industrial {
+  --d-bg: #2f353b;
+  --d-surface: #3a4148;
+  --d-text: #eef0f2;
+  --d-muted: #c3c9cf;
+  --d-accent: #f2c230;
+  --d-accent-contrast: #2f353b;
+  --d-scheme: dark;
+}
+
+.wd-banking {
+  --d-bg: #0e2747;
+  --d-surface: #15325a;
+  --d-text: #f1f3f7;
+  --d-muted: #c2cbda;
+  --d-accent: #d9b95e;
+  --d-accent-contrast: #0e2747;
+  --d-scheme: dark;
+}
+
+.wd-between {
+  --d-bg: #1b1e24;
+  --d-surface: #252931;
+  --d-text: #e6e8ec;
+  --d-muted: #b6bbc4;
+  --d-accent: #9db4d6;
+  --d-accent-contrast: #1b1e24;
+  --d-scheme: dark;
+}
+
+.wd-energy {
+  --d-bg: #0b1d3a;
+  --d-surface: #12284d;
+  --d-text: #eaf6f4;
+  --d-muted: #b7c9d6;
+  --d-accent: #3fe0c5;
+  --d-accent-contrast: #0b1d3a;
+  --d-scheme: dark;
+}
+
+.wd-corporate {
+  --d-bg: #f3efe7;
+  --d-surface: #ffffff;
+  --d-text: #24211c;
+  --d-muted: #57514a;
+  --d-accent: #a63b25;
+  --d-accent-contrast: #ffffff;
+  --d-scheme: light;
+}
+
+.wd-cement {
+  --d-bg: #d9d4cc;
+  --d-surface: #ece8e2;
+  --d-text: #1f1d1a;
+  --d-muted: #47433d;
+  --d-accent: #843f08;
+  --d-accent-contrast: #ffffff;
+  --d-scheme: light;
+}
+
+.wd-ai {
+  --d-bg: #120b24;
+  --d-surface: #1c1336;
+  --d-text: #eee9fb;
+  --d-muted: #c4b8e6;
+  --d-accent: #b9a3ff;
+  --d-accent-contrast: #120b24;
+  --d-scheme: dark;
+}
+
+/* A chapter (or a card with its own palette) turns its district into theme tokens. */
+.worlds-chapter,
+.worlds-card--own {
+  --color-bg: var(--d-bg);
+  --color-surface: var(--d-surface);
+  --color-text: var(--d-text);
+  --color-text-muted: var(--d-muted);
+  --color-accent: var(--d-accent);
+  --color-accent-contrast: var(--d-accent-contrast);
+  --color-border: var(--d-muted);
+  --color-focus: var(--d-accent);
+  color-scheme: var(--d-scheme);
+  color: var(--color-text);
+}
+
+/* ---------- Layout ---------- */
+
+.worlds__stage {
+  background: var(--map-land);
+  padding: 1rem var(--space-gutter);
+}
+
+.worlds-map {
+  position: relative;
+  max-width: 26rem;
+  margin: 0 auto;
+}
+
+.worlds-map__viewport {
+  position: relative;
+  overflow: hidden;
+}
+
+.worlds-map__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.worlds-chapter {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(2.5rem, 6vw, 4.5rem) var(--space-gutter);
+  background: var(--color-bg);
+}
+
+.worlds-chapter > * {
+  width: 100%;
+  max-width: 48rem;
+}
+
+.worlds-chapter > h2 {
+  font-size: clamp(1.75rem, 4vw, 2.4rem);
+  margin-bottom: 1.25rem;
+}
+
+/* The district name is visible text above the chapter heading. */
+.worlds-district {
+  order: -1;
+  margin: 0 0 0.4rem;
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+.worlds-entries {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.worlds-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  width: auto;
+  min-height: 44px;
+  margin-top: 1.5rem;
+  font-weight: 600;
+}
+
+@media (min-width: 768px) and (min-height: 600px) {
+  .worlds-back {
+    display: none;
+  }
+
+  .worlds__stage {
+    position: sticky;
+    top: var(--site-header-height);
+    padding: 0;
+  }
+
+  .worlds-map {
+    max-width: none;
+    height: 100%;
+  }
+
+  .worlds-map__viewport,
+  .worlds-map__camera,
+  .worlds-map__svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .worlds-map__camera {
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 600px) {
+  .worlds {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+  }
+
+  .worlds__stage {
+    height: calc(100vh - var(--site-header-height));
+    height: calc(100svh - var(--site-header-height));
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) and (min-height: 600px) {
+  html:root[data-theme='worlds'] {
+    --map-strip-height: 40svh;
+    --jump-offset: calc(var(--site-header-height) + var(--map-strip-height) + var(--jump-gap));
+  }
+
+  .worlds__stage {
+    z-index: 10;
+    height: var(--map-strip-height);
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+/* ---------- Hook ---------- */
+
+.worlds-hook h1 {
+  font-size: clamp(2.25rem, 6vw, 3.75rem);
+}
+
+.worlds-hook__role,
+.worlds-hook__summary {
+  color: var(--color-text-muted);
+}
+
+.worlds-hook__line {
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 3vw, 1.9rem);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.worlds-hook__hint {
+  font-weight: 600;
+}
+
+.worlds-hook__start {
+  align-self: flex-start;
+  width: auto;
+}
+
+/* ---------- Cards ---------- */
+
+.worlds-card {
+  padding: 1.25rem 1.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.worlds-card h3 {
+  font-size: 1.15rem;
+  margin-bottom: 0.25rem;
+}
+
+.worlds-card__eyebrow {
+  margin: 0 0 0.3rem;
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.worlds-card__meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
+
+.worlds-card ul {
+  margin: 0.75rem 0;
+  padding-left: 1.2rem;
+}
+
+.worlds-card__skills {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Shared skills explorer, restyled through its classes. */
+.skills {
+  display: grid;
+  gap: 1rem;
+}
+
+.skills__group h3 {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+}
+
+.skills__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skills__chip {
+  min-height: 2.75rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.skills__chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.skills__result {
+  min-height: 4rem;
+  padding: 1rem 1.25rem;
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-surface);
+}
+
+.skills__result p {
+  margin: 0 0 0.25rem;
+}
+
+.skills__result ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
+/* ---------- Map (SVG) ---------- */
+
+.worlds-land {
+  fill: var(--map-land);
+}
+
+.worlds-road {
+  fill: none;
+  stroke: #9c958a;
+  stroke-width: 14;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.worlds-ground {
+  fill: var(--d-bg);
+}
+
+.worlds-sign {
+  fill: var(--d-muted);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.wb-body {
+  fill: var(--d-surface);
+  stroke: var(--d-muted);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.wb-accent {
+  fill: var(--d-accent);
+}
+
+.wb-dark {
+  fill: var(--d-muted);
+}
+
+.wb-line {
+  fill: none;
+  stroke: var(--d-muted);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.worlds-link {
+  cursor: pointer;
+}
+
+/* The SVG ring replaces the outline (CSS outline on SVG isn't painted reliably in WebKit). */
+.worlds-link:focus {
+  outline: none;
+}
+
+.worlds-hit {
+  fill: transparent;
+}
+
+.worlds-ring {
+  fill: none;
+  stroke: var(--d-accent);
+  stroke-width: 5;
+  opacity: 0;
+}
+
+.worlds-link:focus-visible .worlds-ring {
+  opacity: 1;
+}
+
+.worlds-lift {
+  transition: transform 0.2s ease-out;
+}
+
+.worlds-link:hover .worlds-lift,
+.worlds-link:focus-visible .worlds-lift {
+  transform: translateY(-8px);
+}
+
+.worlds-chip {
+  fill: var(--d-surface);
+  stroke: var(--d-muted);
+  stroke-width: 1.5;
+}
+
+.worlds-label {
+  fill: var(--d-text);
+  font-family: var(--font-display);
+  font-weight: 600;
+}

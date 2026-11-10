@@ -73,4 +73,28 @@ export const ptBR: Dictionary = {
   footer: {
     rights: '© {year} William Amaro Finardi. Todos os direitos reservados.',
   },
+  /** Worlds concept (concept/worlds branch only). First PT option, as approved. */
+  worlds: {
+    title: 'Seis distritos, um desenvolvedor',
+    hint: 'Role para viajar ou escolha um prédio para explorar',
+    startExploring: 'Comece a explorar',
+    worldMap: 'Mapa do mundo',
+    backToMap: 'Voltar ao mapa',
+    districts: {
+      industrial: 'Distrito industrial',
+      banking: 'Distrito bancário',
+      betweenWorlds: 'Entre mundos',
+      energy: 'Distrito de energia',
+      corporate: 'Distrito corporativo',
+      cement: 'Distrito de cimento, cargas e caminhões',
+      ai: 'Fronteira da IA',
+      workshop: 'Oficina',
+      postOffice: 'Correio',
+    },
+    /** PENDING William's OK (shown with the spike). */
+    mapLabels: {
+      betweenWorldsAtos: 'Entre mundos · ATOS',
+      computerScience: 'Ciência da Computação · UniRitter',
+    },
+  },
 };

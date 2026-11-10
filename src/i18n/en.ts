@@ -73,4 +73,31 @@ export const en = {
   footer: {
     rights: '© {year} William Amaro Finardi. All rights reserved.',
   },
+  /**
+   * Worlds / clickable-world concept (concept/worlds branch only). Version 2 copy approved
+   * by William (2026-11-09; first PT option where two were offered).
+   */
+  worlds: {
+    title: 'Six districts, one developer',
+    hint: 'Scroll to travel, or choose a building to explore',
+    startExploring: 'Start exploring',
+    worldMap: 'World map',
+    backToMap: 'Back to the map',
+    districts: {
+      industrial: 'Industrial district',
+      banking: 'Banking district',
+      betweenWorlds: 'Between worlds',
+      energy: 'Energy district',
+      corporate: 'Corporate district',
+      cement: 'Cement, cargo and trucks district',
+      ai: 'AI frontier',
+      workshop: 'Workshop',
+      postOffice: 'Post office',
+    },
+    /** PENDING William's OK (shown with the spike): the two map labels added after W3. */
+    mapLabels: {
+      betweenWorldsAtos: 'Between worlds · ATOS',
+      computerScience: 'Computer Science · UniRitter',
+    },
+  },
 } as const;
