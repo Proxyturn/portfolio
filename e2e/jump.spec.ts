@@ -201,13 +201,18 @@ test('the jump offset uses the measured header height', async ({ page }) => {
 });
 
 /**
- * Opens a deep link whose `load` event is held back by a slow image (added at
- * DOMContentLoaded), so a test can act between the jump and `load`, like an engine (Firefox)
- * that handles the fragment again later or a web font that swaps late.
+ * Opens a deep link whose `load` event is held back by an image (added at DOMContentLoaded)
+ * that is only served when the test calls the returned `finishLoading`. So a test can act
+ * between the jump and `load` at any runner speed, like an engine (Firefox) that handles the
+ * fragment again later or a web font that swaps late.
  */
-async function visitDeepLinkWithSlowLoad(page: Page, hash: string) {
-  await page.route('**/__e2e-slow-load.png', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+async function visitDeepLinkWithHeldLoad(page: Page, hash: string) {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/__e2e-held-load.png', async (route) => {
+    await held;
     await route.fulfill({ status: 204 });
   });
   await page.addInitScript(() => {
@@ -215,19 +220,23 @@ async function visitDeepLinkWithSlowLoad(page: Page, hash: string) {
     document.addEventListener('DOMContentLoaded', () => {
       const img = document.createElement('img');
       img.alt = '';
-      img.src = '/__e2e-slow-load.png';
+      img.src = '/__e2e-held-load.png';
       document.body.append(img);
     });
   });
   await page.goto(`/${hash}`, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#now h2')).toBeFocused();
   expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
+  return async function finishLoading() {
+    release();
+    await page.waitForLoadState('load');
+  };
 }
 
 test('a deep link keeps its focus and position while the page finishes loading', async ({
   page,
 }) => {
-  await visitDeepLinkWithSlowLoad(page, '#now');
+  const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
   // What Firefox does at load, and what a late font swap does: focus reset to the document,
   // and the content above the target grows.
   await page.evaluate(() => {
@@ -236,17 +245,46 @@ test('a deep link keeps its focus and position while the page finishes loading',
       .querySelector<HTMLElement>('[data-chapter="hook"]')
       ?.style.setProperty('padding-top', '160px');
   });
-  await page.waitForLoadState('load');
+  await finishLoading();
+  await expectLandedOn(page, 'now');
+});
+
+test('a deep link moved by page script right after load returns to its landing', async ({
+  page,
+}) => {
+  const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
+  // Like an engine's own load-time fragment scroll, or a scroll scene refreshing at load:
+  // the page moves by 120 px after the jump code's own load check has run.
+  await page.evaluate(() => {
+    window.addEventListener('load', () => {
+      window.scrollBy({ top: 120, behavior: 'instant' });
+    });
+  });
+  await finishLoading();
+  await expectLandedOn(page, 'now');
+});
+
+test('a deep link whose target moves after load (content inserted above) follows it', async ({
+  page,
+}) => {
+  const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
+  await finishLoading();
+  // Like a pin spacer or a late image above the target: 200 px more content before it.
+  await page.evaluate(() => {
+    document
+      .querySelector<HTMLElement>('[data-chapter="hook"]')
+      ?.style.setProperty('padding-top', '200px');
+  });
   await expectLandedOn(page, 'now');
 });
 
 test('once the visitor interacts, settling a deep link stops', async ({ page }) => {
-  await visitDeepLinkWithSlowLoad(page, '#now');
+  const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
   await page.keyboard.press('Shift');
   await page.evaluate(() => {
     (document.activeElement as HTMLElement | null)?.blur();
   });
-  await page.waitForLoadState('load');
+  await finishLoading();
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
 });

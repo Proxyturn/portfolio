@@ -137,7 +137,8 @@ export function handleHashChange(): void {
  * looked for the fragment (and, on reload or Back from another page, usually after it tried
  * to restore the scroll position), so neither happened. Call once the story has rendered
  * (before paint). If the page is still at the top, scrolls instantly to the hash's jump target
- * (no visible travel, and reduced motion is respected) and focuses its heading. If the page
+ * (no visible travel, and reduced motion is respected; the landing ignores reveal transforms,
+ * see `landingScrollY`) and focuses its heading. If the page
  * is no longer at the top, the browser has already scrolled (a restored position, or its own
  * fragment scroll) and that position wins: nothing scrolls, but focus still moves to the jump
  * target's heading (without scrolling). Does nothing without a hash. `installDeepLink` calls
@@ -148,8 +149,11 @@ export function jumpToHashOnLoad(): HTMLElement | null {
   if (!element) return null;
   const target = jumpTargetFor(element);
   if (window.scrollY !== 0) return target ? focusJumpTarget(target) : null;
-  (target ?? element).scrollIntoView({ block: 'start', behavior: 'instant' });
-  if (target) return focusJumpTarget(target);
+  if (target) {
+    scrollToLanding(target);
+    return focusJumpTarget(target);
+  }
+  element.scrollIntoView({ block: 'start', behavior: 'instant' });
   if (element.hasAttribute('tabindex')) {
     element.focus({ preventScroll: true });
     return element;
@@ -163,25 +167,59 @@ const INTERACTIONS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
 /** Upper bound for settling a deep link, so nothing keeps watching a long-open page. */
 export const SETTLE_LIMIT_MS = 10_000;
 
-/** Document position of an element's layout box, ignoring transforms (such as reveal tweens). */
-function layoutTop(element: HTMLElement): number {
-  let top = 0;
-  let node: Element | null = element;
-  while (node instanceof HTMLElement) {
-    top += node.offsetTop;
-    node = node.offsetParent;
+/** Upper bound for realigning scrolls while settling, so settling can never fight a scene. */
+export const SETTLE_MAX_REALIGNS = 20;
+
+/** Vertical translation of an element's own transform (0 without one). */
+function translateY(element: Element): number {
+  const match = /^matrix(3d)?\((.+)\)$/.exec(getComputedStyle(element).transform);
+  if (!match?.[2]) return 0;
+  const values = match[2].split(',').map(Number);
+  return (match[1] ? values[13] : values[5]) ?? 0;
+}
+
+/**
+ * Document position of an element, without the vertical translations on it and its ancestors
+ * (such as reveal tweens), so a card that is still sliding in doesn't move its landing. It is
+ * measured from the rendered box (sub-pixel exact, and right for a section a scroll scene has
+ * pinned with `position: fixed`).
+ */
+function documentTop(element: HTMLElement): number {
+  let shift = 0;
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    shift += translateY(node);
   }
-  return top;
+  return element.getBoundingClientRect().top + window.scrollY - shift;
+}
+
+/**
+ * The scroll position that puts a jump target at its scroll margin, below the sticky header,
+ * clamped to what the page can scroll (the last chapters may not reach the top).
+ */
+export function landingScrollY(target: HTMLElement): number {
+  const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+  const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  return Math.min(max, Math.max(0, documentTop(target) - margin));
+}
+
+/** Scrolls instantly so a jump target lands at its scroll margin. */
+export function scrollToLanding(target: HTMLElement): void {
+  window.scrollTo({ top: landingScrollY(target), behavior: 'instant' });
 }
 
 /**
  * Keeps a deep link's landing while the page finishes loading. Some engines act on the fragment
- * again later (Firefox scrolls to it at load and resets focus to the document), and late
- * layout changes such as a web-font swap move the target. So, until the visitor interacts:
- * - when `focusElement` loses focus to the document, or at `load` and `document.fonts.ready`,
- *   focus goes back to it (without scrolling), but only while nothing else has focus;
- * - with `align` (the jump code did the scrolling), a target whose layout position drifted is
- *   scrolled back by the same distance, so it stays at its scroll margin.
+ * again later (Firefox scrolls to the fragment's own element at load and resets focus to the
+ * document), and late layout changes (a web-font swap, a scroll scene inserting a pin spacer)
+ * move the page or the target. So, until the visitor interacts:
+ * - focus: when `focusElement` loses focus to the document, at `load` (and one task later)
+ *   and at `document.fonts.ready`, focus goes back to it without scrolling, but only while
+ *   nothing else has focus;
+ * - position, with `align` (the jump code did the scrolling): at those same moments and on
+ *   layout changes (a ResizeObserver on the root and body, at most one check per frame), if
+ *   the target is more than 1 px away from its landing, the page scrolls there instantly.
+ *   Scrolling doesn't resize anything, so it can't retrigger itself, and it gives up after
+ *   `SETTLE_MAX_REALIGNS` scrolls.
  * It stops at the first pointerdown, keydown, wheel or touchstart, when the hash no longer
  * names `target`, after `SETTLE_LIMIT_MS`, or when the returned cleanup runs.
  */
@@ -190,9 +228,9 @@ export function settleDeepLink(
   focusElement: HTMLElement,
   align: boolean,
 ): () => void {
-  const startTop = layoutTop(target);
-  const startScroll = window.scrollY;
   const timers: number[] = [];
+  let frame = 0;
+  let realigns = 0;
   let done = false;
 
   const reapply = () => {
@@ -204,21 +242,32 @@ export function settleDeepLink(
     }
     const active = document.activeElement;
     if (!active || active === document.body) focusElement.focus({ preventScroll: true });
-    if (align) {
-      const drift = layoutTop(target) - startTop;
-      if (Math.abs(drift) > 1) {
-        window.scrollTo({ top: startScroll + drift, behavior: 'instant' });
+    if (align && realigns < SETTLE_MAX_REALIGNS) {
+      const landing = landingScrollY(target);
+      if (Math.abs(window.scrollY - landing) > 1) {
+        realigns += 1;
+        window.scrollTo({ top: landing, behavior: 'instant' });
       }
     }
   };
   const later = () => {
     timers.push(window.setTimeout(reapply, 0));
   };
+  const nextFrame = () => {
+    if (!frame) {
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        reapply();
+      });
+    }
+  };
   const onLoad = () => {
     reapply();
     // The engine's own load-time fragment handling may run right after the load event.
     later();
   };
+  const observer =
+    align && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(nextFrame) : null;
   const stop = () => {
     if (done) return;
     done = true;
@@ -226,6 +275,8 @@ export function settleDeepLink(
     window.removeEventListener('load', onLoad);
     window.removeEventListener('hashchange', reapply);
     focusElement.removeEventListener('focusout', later);
+    observer?.disconnect();
+    if (frame) window.cancelAnimationFrame(frame);
     for (const timer of timers) window.clearTimeout(timer);
   };
 
@@ -234,6 +285,8 @@ export function settleDeepLink(
   }
   window.addEventListener('hashchange', reapply);
   focusElement.addEventListener('focusout', later);
+  observer?.observe(document.documentElement);
+  observer?.observe(document.body);
   if (document.readyState === 'complete') later();
   else window.addEventListener('load', onLoad, { once: true });
   // Not every environment has the Font Loading API.
