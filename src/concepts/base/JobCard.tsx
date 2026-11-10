@@ -13,7 +13,7 @@ export function JobCard({ job }: { readonly job: Job }) {
   return (
     <article className="job reveal" id={`job-${job.id}`} data-job={job.id}>
       <header>
-        <h3>{jobTitle(job, lang)}</h3>
+        <h3 tabIndex={-1}>{jobTitle(job, lang)}</h3>
         <p className="job__period">{formatPeriod(job, lang)}</p>
         {job.role && (
           <p className="job__role">

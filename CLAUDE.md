@@ -72,38 +72,69 @@ William's request
 
 ## William's Phase 0 answers (2026-11-08)
 
-| Topic            | Decision                                                                                                                                                               |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LinkedIn         | https://www.linkedin.com/in/william-finardi-819b21b7/                                                                                                                  |
-| GitHub           | https://github.com/Proxyturn                                                                                                                                           |
-| Repo             | Public, named `portfolio`                                                                                                                                              |
-| License          | MIT for code; all rights reserved for content                                                                                                                          |
-| Email provider   | Resend                                                                                                                                                                 |
-| Spam protection  | Honeypot + minimum fill time + rate limit (no captcha)                                                                                                                 |
-| Rate limit       | Upstash Redis, 5 requests per hour per IP (salted hash)                                                                                                                |
-| Form fields      | name (100), email (254), subject (optional, 150), message (5000), delivered to William's email (`CONTACT_TO_EMAIL`; don't write the address in plain text in the repo) |
-| Dependencies     | Approved list; document every one in `docs/DEPENDENCIES.md`                                                                                                            |
-| CV PDF           | William provides a sanitized PDF (not received yet)                                                                                                                    |
-| Photo            | Avatar component built but commented out                                                                                                                               |
-| Domain           | `*.vercel.app` for now                                                                                                                                                 |
-| Analytics        | None                                                                                                                                                                   |
-| SECURITY.md      | GitHub private vulnerability reporting                                                                                                                                 |
-| Privacy denylist | Generic patterns + exact values out of band; **no** nationality words blocked                                                                                          |
-| Default language | `pt*` browser → PT, else EN; remembered in localStorage                                                                                                                |
-| Language URLs    | Single URL with a toggle                                                                                                                                               |
-| i18n             | Custom typed dictionary                                                                                                                                                |
-| Hook line        | EN "Seven years, five industries, one constant: software that keeps working." / PT "Sete anos, cinco setores, uma constante: software que continua funcionando."       |
+| Topic            | Decision                                                                                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LinkedIn         | https://www.linkedin.com/in/william-finardi-819b21b7/                                                                                                                                                             |
+| GitHub           | https://github.com/Proxyturn                                                                                                                                                                                      |
+| Repo             | Public, named `portfolio`                                                                                                                                                                                         |
+| License          | MIT for code; all rights reserved for content                                                                                                                                                                     |
+| Email provider   | Resend                                                                                                                                                                                                            |
+| Spam protection  | Honeypot + minimum fill time + rate limit (no captcha)                                                                                                                                                            |
+| Rate limit       | Upstash Redis, 5 requests per hour per IP (salted hash)                                                                                                                                                           |
+| Form fields      | name (100), email (254), subject (optional, 150), message (5000), delivered to William's email (`CONTACT_TO_EMAIL`; never in plain text in the repo, **except the CV PDF's mailto link**: decision A, 2026-11-09) |
+| Dependencies     | Approved list; document every one in `docs/DEPENDENCIES.md`                                                                                                                                                       |
+| CV PDF           | Generated from `src/content/cv.ts` by `npm run cv` (`scripts/cv/`), committed with its manifest. See "CV PDF decisions" below                                                                                     |
+| Photo            | Avatar component built but commented out                                                                                                                                                                          |
+| Domain           | `*.vercel.app` for now                                                                                                                                                                                            |
+| Analytics        | None                                                                                                                                                                                                              |
+| SECURITY.md      | GitHub private vulnerability reporting                                                                                                                                                                            |
+| Privacy denylist | Generic patterns + exact values out of band; **no** nationality words blocked                                                                                                                                     |
+| Default language | `pt*` browser → PT, else EN; remembered in localStorage                                                                                                                                                           |
+| Language URLs    | Single URL with a toggle                                                                                                                                                                                          |
+| i18n             | Custom typed dictionary                                                                                                                                                                                           |
+| Hook line        | EN "Seven years, five industries, one constant: software that keeps working." / PT "Sete anos, cinco setores, uma constante: software que continua funcionando."                                                  |
+
+### CV PDF decisions (William, 2026-11-09: "Yes, recommended" to the draft questions; "A: keep the link")
+
+- English only for now.
+- The email stays as a visible `mailto:` link (decision A), so the committed PDF is the one
+  place where the address is in plain text. Never put the email in the privacy denylist.
+- The six ATOS jobs are grouped under one ATOS header, with the span derived from their dates.
+- The unnamed Jan–Jun 2023 ATOS entry is headed "Frontend development".
+- The print-only labels (section titles, "Clients:", "Project:", "Coursework:" and so on)
+  were approved through the critic-approved draft and live in `scripts/cv/template.ts`, not
+  in `src/i18n/`.
 
 ## Status
 
 - **Phase 0:** done.
 - **Phase 1** (foundation on `main`): **approved by William on 2026-11-09** and committed
-  locally (eabafcc) as William Amaro Finardi with his GitHub noreply address. Nothing is
-  pushed yet: `gh auth login` / `vercel login` are pending on William's side.
+  (eabafcc) as William Amaro Finardi with his GitHub noreply address. Shared pieces from the
+  Journey build (SkillsExplorer `onChange`, ContactSection `cvLabel`, lag smoothing off) were
+  then added to `main` (3019a94), and `concept/journey` branches from that commit.
+- **Repo:** public at https://github.com/Proxyturn/portfolio since 2026-11-09, with `main`
+  (default) and `concept/journey` pushed and private vulnerability reporting on, with
+  William's yes. Vercel is connected through its GitHub app; each branch gets a preview
+  (`portfolio-git-<branch>-proxyturn.vercel.app`), and Vercel Authentication on previews is
+  off (William, 2026-11-09), and so is the Vercel Toolbar. Production is
+  https://portfolio-bice-two-69.vercel.app. The contact-form env vars are still to do.
 - **Phase 2:** storyboards and the question batch for William are in `docs/STORYBOARDS.md`.
   Critic verdicts (2026-11-09, round 3): A storyboards APPROVED, B questions APPROVED, C
-  project setup APPROVED. Presented to William; answers recorded at the end of `docs/STORYBOARDS.md`. Storyboards are approved one by one. **Journey approved by William (2026-11-09)** and built on `concept/journey`. The critic approved the build; William's decisions on it (copy, labels, skills line, CV caption) are recorded at the end of `docs/STORYBOARDS.md`. Terminal and Worlds are not approved yet.
-  An earlier pre-critic draft had been shown to him before the gate existed.
+  project setup APPROVED. Presented to William (an earlier pre-critic draft had been shown
+  to him before the gate existed); answers recorded at the end of `docs/STORYBOARDS.md`.
+  Storyboards are approved one by one.
+  - **Journey:** approved by William (2026-11-09) and built on `concept/journey`. The critic
+    approved the build; William's decisions on it (copy, labels, skills line, CV caption) are
+    recorded at the end of `docs/STORYBOARDS.md`.
+  - **Terminal:** approved by William (2026-11-09), copy included; built on
+    `concept/terminal`, critic-approved, and pushed with its Vercel preview (2026-11-10).
+  - **Worlds:** version 2, the clickable world (section 3), approved by William (2026-11-09).
+    The shared jump behavior lands on `main` first, then a spike goes to the critic and to
+    William before the full build on `concept/worlds`. Version 3b is kept only as a record.
+    Spike reviewed; William's answers (2026-11-10) are at the end of `docs/STORYBOARDS.md`:
+    copy approved, hook first on phones, labels at least about 12 px. Full build in progress;
+    William's answers on it (12 px district signs, hook first in every layout) are recorded
+    there too.
 
 ## Conventions (summary; details in README.md)
 

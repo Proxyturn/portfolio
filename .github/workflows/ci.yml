@@ -3,6 +3,8 @@ name: CI
 on:
   push:
   pull_request:
+  # Manual run: gitleaks then scans the full git history, not just the pushed commits.
+  workflow_dispatch:
 
 # Least privilege: every job only reads the repository unless it says otherwise.
 permissions:
@@ -31,9 +33,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       # Unit + API + privacy (source and dist/) with coverage thresholds enforced.
+      # The exact-value denylist must be present except on pull requests from forks, which get
+      # no secrets. Dependabot runs read the same value from the Dependabot secrets.
       - run: npm run test:coverage
         env:
           PRIVACY_DENYLIST: ${{ secrets.PRIVACY_DENYLIST }}
+          PRIVACY_DENYLIST_REQUIRED: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '1' || '' }}
       - run: npm audit --audit-level=high
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

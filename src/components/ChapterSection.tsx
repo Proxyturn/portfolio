@@ -10,13 +10,19 @@ interface Props {
   readonly className?: string;
   /** The hook chapter renders its own <h1>; other chapters get an <h2> title. */
   readonly hideTitle?: boolean;
+  /**
+   * Optional short label shown before the title (for example a district name). It comes
+   * before the heading in reading order (it isn't announced when a jump focuses the heading).
+   * Nothing is rendered when it is absent or empty.
+   */
+  readonly eyebrow?: ReactNode;
 }
 
 /**
  * Wrapper every concept uses for a story beat. Provides the anchor id, the `data-chapter`
  * hook that navigation, progress and tests rely on, and an accessible name.
  */
-export function ChapterSection({ id, children, className, hideTitle = false }: Props) {
+export function ChapterSection({ id, children, className, hideTitle = false, eyebrow }: Props) {
   const { lang } = useLanguage();
   const chapter = cv.chapters.find((c) => c.id === id);
   const titleId = `${id}-title`;
@@ -28,7 +34,12 @@ export function ChapterSection({ id, children, className, hideTitle = false }: P
       aria-label={hideTitle && chapter ? t(chapter.navLabel, lang) : undefined}
       className={className}
     >
-      {!hideTitle && chapter && <h2 id={titleId}>{t(chapter.title, lang)}</h2>}
+      {eyebrow ? <p className="chapter__eyebrow">{eyebrow}</p> : null}
+      {!hideTitle && chapter && (
+        <h2 id={titleId} tabIndex={-1}>
+          {t(chapter.title, lang)}
+        </h2>
+      )}
       {children}
     </section>
   );
