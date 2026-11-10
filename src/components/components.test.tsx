@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cv } from '../content/cv';
 import { renderWithLang } from '../test/render';
+import { LanguageProvider } from '../i18n/LanguageProvider';
 import { Avatar } from './Avatar';
+import { ChapterSection } from './ChapterSection';
 import { ChapterNav } from './ChapterNav';
 import { EmailReveal } from './EmailReveal';
 import { Footer } from './Footer';
@@ -145,5 +147,33 @@ describe('Footer and Avatar', () => {
     renderWithLang(<Avatar size={96} />);
     const img = screen.getByRole('img', { name: cv.identity.name });
     expect(img).toHaveAttribute('width', '96');
+  });
+});
+
+describe('ChapterSection', () => {
+  it('renders an optional eyebrow before the heading, and nothing extra without it', () => {
+    const { container, rerender } = renderWithLang(
+      <ChapterSection id="energy" eyebrow="District">
+        <p>Body</p>
+      </ChapterSection>,
+    );
+    const section = container.querySelector('[data-chapter="energy"]');
+    const eyebrow = section?.firstElementChild;
+    expect(eyebrow).toHaveClass('chapter__eyebrow');
+    expect(eyebrow).toHaveTextContent('District');
+    expect(eyebrow?.nextElementSibling?.tagName).toBe('H2');
+    expect(screen.getByRole('region', { name: 'Powering energy' })).toBe(section);
+
+    rerender(
+      <LanguageProvider initial="en">
+        <ChapterSection id="energy">
+          <p>Body</p>
+        </ChapterSection>
+      </LanguageProvider>,
+    );
+    expect(container.querySelector('.chapter__eyebrow')).toBeNull();
+    expect(container.querySelector('[data-chapter="energy"]')?.firstElementChild?.tagName).toBe(
+      'H2',
+    );
   });
 });
