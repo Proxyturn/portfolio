@@ -1,6 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { cv, visit } from './helpers';
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * The shared jump behavior (docs/STORYBOARDS.md, "One shared jump behavior"): native hash
  * navigation, focus on the target's heading, and every target landing below the sticky header.
@@ -110,7 +114,14 @@ test('a skills explorer result jumps to the job, below the header, with focus', 
   const skill = cv.skills.find((s) => s.id === 'xamarin');
   const job = cv.jobs.find((j) => j.skills.includes('xamarin'));
   if (!skill || !job) throw new Error('Expected a Xamarin job in the CV.');
-  await page.getByRole('button', { name: skill.name.en, exact: true }).click();
+  // A concept may show a visible prefix that stays in the accessible name (label in name),
+  // such as Terminal's "grep Xamarin". The name must still end with the whole skill name, so
+  // "React" could never match a "React Native" chip.
+  const chip = page.getByRole('button', {
+    name: new RegExp(`(^|\\s)${escapeRegExp(skill.name.en)}$`),
+  });
+  await expect(chip).toHaveCount(1);
+  await chip.click();
   const link = page.locator(`.skills__result a[href="#job-${job.id}"]`);
   await link.click();
   await expect(page).toHaveURL(new RegExp(`#job-${job.id}$`));
@@ -142,8 +153,10 @@ test('reloading a deep link lands on it again', async ({ page }) => {
  * Reloading after scrolling away from the hash. Chromium and WebKit try to restore the scroll
  * position before the story has rendered, find the page too short and give up (measured: they
  * end at 0 without the jump code), so the hash wins and the page lands on it. An engine that
- * does restore the position leaves scrollY above 0, and the jump code then steps aside.
- * Firefox can't run on the development machine, so both outcomes are accepted there.
+ * does restore the position, or has already scrolled to the hash itself (seen in Chromium),
+ * leaves scrollY above 0: the jump code then doesn't scroll, but
+ * still focuses the hash's heading. Firefox can't run on the development machine, so both
+ * outcomes are accepted there.
  */
 test('reloading after scrolling away: restored position, or the hash, never the top', async ({
   page,
@@ -162,7 +175,7 @@ test('reloading after scrolling away: restored position, or the hash, never the 
   const restored = Math.abs(landing.scrollY - scrolled) <= 2;
   if (browserName === 'firefox') {
     if (!restored) await expectLandedOn(page, 'now');
-    else expect(landing.scrollY).toBeGreaterThan(0);
+    else expect(landing.focused).toBe(true);
   } else {
     await expectLandedOn(page, 'now');
   }

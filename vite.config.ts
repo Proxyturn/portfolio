@@ -35,7 +35,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      include: ['src/**/*.{ts,tsx}', 'api/**/*.ts', 'shared/**/*.ts'],
+      include: ['src/**/*.{ts,tsx}', 'api/**/*.ts', 'shared/**/*.ts', 'scripts/cv/template.ts'],
       exclude: [
         '**/*.test.{ts,tsx}',
         '**/*.d.ts',
@@ -47,6 +47,7 @@ export default defineConfig({
       thresholds: {
         'src/**': { lines: 80, branches: 80 },
         'api/**': { lines: 80, branches: 80 },
+        'scripts/**': { lines: 80, branches: 80 },
       },
     },
     projects: [
@@ -67,6 +68,14 @@ export default defineConfig({
           environment: 'node',
           include: ['tests/api/**/*.test.ts'],
           restoreMocks: true,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'scripts',
+          environment: 'node',
+          include: ['scripts/**/*.test.ts'],
         },
       },
       {

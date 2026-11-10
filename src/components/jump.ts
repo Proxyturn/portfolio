@@ -134,17 +134,19 @@ export function handleHashChange(): void {
 
 /**
  * Deep links on load and reload (`/#now`, `/#job-…`): the story renders after the browser
- * looked for the fragment (and, on reload or Back from another page, after it tried to
- * restore the scroll position), so neither happened. Call once the story has rendered (before
- * paint). If the page is still at the top, scrolls instantly to the hash's jump target (no
- * visible travel, and reduced motion is respected) and focuses its heading. Does nothing
- * without a hash, or when the page is no longer at the top: then the browser (or the visitor)
- * has already scrolled, and that position wins.
+ * looked for the fragment (and, on reload or Back from another page, usually after it tried
+ * to restore the scroll position), so neither happened. Call once the story has rendered
+ * (before paint). If the page is still at the top, scrolls instantly to the hash's jump target
+ * (no visible travel, and reduced motion is respected) and focuses its heading. If the page
+ * is no longer at the top, the browser has already scrolled (a restored position, or its own
+ * fragment scroll) and that position wins: nothing scrolls, but focus still moves to the jump target's heading (without
+ * scrolling). Does nothing without a hash.
  */
 export function jumpToHashOnLoad(): HTMLElement | null {
   const element = elementForHash(window.location.hash);
-  if (!element || window.scrollY !== 0) return null;
+  if (!element) return null;
   const target = jumpTargetFor(element);
+  if (window.scrollY !== 0) return target ? focusJumpTarget(target) : null;
   (target ?? element).scrollIntoView({ block: 'start', behavior: 'instant' });
   if (target) return focusJumpTarget(target);
   if (element.hasAttribute('tabindex')) {
