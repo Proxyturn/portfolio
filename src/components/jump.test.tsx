@@ -267,16 +267,34 @@ describe('jumpToHashOnLoad', () => {
     expect(jumpTargetFor(document.getElementById('now-title') as HTMLElement)?.id).toBe('now');
   });
 
-  it('does not fight a page the browser (or the visitor) has already scrolled', () => {
-    story();
-    window.history.replaceState(null, '', '/#now');
+  function withScrollY(value: number, run: () => void) {
     const original = Object.getOwnPropertyDescriptor(window, 'scrollY');
-    Object.defineProperty(window, 'scrollY', { configurable: true, value: 120 });
+    Object.defineProperty(window, 'scrollY', { configurable: true, value });
     try {
-      expect(jumpToHashOnLoad()).toBeNull();
+      run();
     } finally {
       if (original) Object.defineProperty(window, 'scrollY', original);
     }
+  }
+
+  it('on a page already scrolled (restored), focuses the heading without scrolling', () => {
+    story();
+    window.history.replaceState(null, '', '/#now');
+    withScrollY(120, () => {
+      const focused = jumpToHashOnLoad();
+      expect(focused).toBe(screen.getByRole('heading', { name: 'Now' }));
+      expect(focused).toHaveFocus();
+    });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('on a page already scrolled, leaves a hash outside any jump target alone', () => {
+    story();
+    window.history.replaceState(null, '', '/#main');
+    withScrollY(120, () => {
+      expect(jumpToHashOnLoad()).toBeNull();
+    });
+    expect(document.getElementById('main')).not.toHaveFocus();
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });
