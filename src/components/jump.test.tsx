@@ -9,10 +9,13 @@ import {
   focusJumpTarget,
   handleHashChange,
   handleJumpClick,
+  installDeepLink,
   isJumpTarget,
   jumpFocusElement,
   jumpTargetFor,
   jumpToHashOnLoad,
+  SETTLE_LIMIT_MS,
+  settleDeepLink,
   trackHeaderHeight,
 } from './jump';
 import { useHeaderHeight } from './useJumpNavigation';
@@ -442,5 +445,188 @@ describe('useJumpNavigation in the app', () => {
     for (const heading of container.querySelectorAll('[data-chapter] > h2')) {
       expect(heading).toHaveAttribute('tabindex', '-1');
     }
+  });
+});
+
+describe('settleDeepLink (keeping a deep link while the page loads)', () => {
+  /** A realigning scroll (other code, such as ScrollTrigger at load, may call scrollTo too). */
+  const REALIGN: unknown = expect.objectContaining({ behavior: 'instant' });
+  let stop: () => void = () => undefined;
+  const scrollTo = vi.fn();
+  const restores: (() => void)[] = [];
+
+  function override(object: object, key: string, value: unknown) {
+    const original = Object.getOwnPropertyDescriptor(object, key);
+    Object.defineProperty(object, key, { configurable: true, value });
+    restores.push(() => {
+      if (original) Object.defineProperty(object, key, original);
+      else Reflect.deleteProperty(object, key);
+    });
+  }
+
+  /** A chapter at a controllable layout position, with the URL pointing at it. */
+  function story(hash = '/#now') {
+    mount(`
+      <section id="now" data-chapter="now"><h2 tabindex="-1">Now</h2></section>
+      <button type="button">Elsewhere</button>`);
+    window.history.replaceState(null, '', hash);
+    const target = document.getElementById('now') as HTMLElement;
+    let top = 1000;
+    Object.defineProperty(target, 'offsetTop', { configurable: true, get: () => top });
+    const heading = screen.getByRole('heading', { name: 'Now' });
+    heading.focus();
+    return {
+      target,
+      heading,
+      moveTo: (value: number) => {
+        top = value;
+      },
+    };
+  }
+
+  beforeEach(() => {
+    scrollTo.mockClear();
+    vi.spyOn(window, 'scrollTo').mockImplementation(scrollTo);
+  });
+
+  afterEach(() => {
+    stop();
+    for (const restore of restores.splice(0)) restore();
+    vi.useRealTimers();
+  });
+
+  it('puts focus back on the heading when the engine resets it to the document', async () => {
+    const { target, heading } = story();
+    stop = settleDeepLink(target, heading, true);
+    await act(nextTask);
+    heading.blur();
+    expect(document.body).toHaveFocus();
+    await act(nextTask);
+    expect(heading).toHaveFocus();
+    expect(scrollTo).not.toHaveBeenCalledWith(REALIGN);
+  });
+
+  it('never takes focus from another element', async () => {
+    const { target, heading } = story();
+    stop = settleDeepLink(target, heading, true);
+    const button = screen.getByRole('button', { name: 'Elsewhere' });
+    button.focus();
+    await act(nextTask);
+    expect(button).toHaveFocus();
+  });
+
+  it.each(['pointerdown', 'keydown', 'wheel', 'touchstart'])(
+    'stops for good after the first %s',
+    async (type) => {
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      await act(nextTask);
+      window.dispatchEvent(new Event(type));
+      heading.blur();
+      moveTo(1100);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      await act(nextTask);
+      expect(document.body).toHaveFocus();
+      expect(scrollTo).not.toHaveBeenCalledWith(REALIGN);
+    },
+  );
+
+  it('stops when the hash no longer names the target', async () => {
+    const { target, heading } = story();
+    stop = settleDeepLink(target, heading, true);
+    await act(nextTask);
+    window.history.replaceState(null, '', '/#elsewhere');
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    window.history.replaceState(null, '', '/#now');
+    heading.blur();
+    await act(nextTask);
+    expect(document.body).toHaveFocus();
+  });
+
+  it('realigns a target whose layout drifted, at load, by the same distance', () => {
+    override(document, 'readyState', 'loading');
+    override(window, 'scrollY', 900);
+    const { target, heading, moveTo } = story();
+    stop = settleDeepLink(target, heading, true);
+    moveTo(1025);
+    window.dispatchEvent(new Event('load'));
+    expect(scrollTo).toHaveBeenCalledWith({ top: 925, behavior: 'instant' });
+  });
+
+  it('ignores sub-pixel drift, and never realigns a position the browser restored', () => {
+    override(document, 'readyState', 'loading');
+    const first = story();
+    stop = settleDeepLink(first.target, first.heading, true);
+    first.moveTo(1000.5);
+    window.dispatchEvent(new Event('load'));
+    expect(scrollTo).not.toHaveBeenCalledWith(REALIGN);
+    stop();
+
+    stop = settleDeepLink(first.target, first.heading, false);
+    first.moveTo(1200);
+    window.dispatchEvent(new Event('load'));
+    expect(scrollTo).not.toHaveBeenCalledWith(REALIGN);
+  });
+
+  it('checks again once web fonts are ready', async () => {
+    let fontsLoaded: () => void = () => undefined;
+    override(document, 'fonts', {
+      ready: new Promise<void>((resolve) => {
+        fontsLoaded = resolve;
+      }),
+    });
+    const { target, heading, moveTo } = story();
+    stop = settleDeepLink(target, heading, true);
+    await act(nextTask);
+    moveTo(1030);
+    await act(async () => {
+      fontsLoaded();
+      await Promise.resolve();
+    });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 30, behavior: 'instant' });
+  });
+
+  it(`gives up after ${String(SETTLE_LIMIT_MS)} ms, and the cleanup stops it too`, () => {
+    vi.useFakeTimers();
+    const { target, heading, moveTo } = story();
+    stop = settleDeepLink(target, heading, true);
+    vi.advanceTimersByTime(SETTLE_LIMIT_MS);
+    moveTo(1100);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(scrollTo).not.toHaveBeenCalledWith(REALIGN);
+
+    const again = settleDeepLink(target, heading, true);
+    again();
+    again();
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(scrollTo).not.toHaveBeenCalledWith(REALIGN);
+  });
+});
+
+describe('installDeepLink', () => {
+  let stop: () => void = () => undefined;
+  afterEach(() => {
+    stop();
+  });
+
+  it('does nothing without a hash or outside a jump target', () => {
+    mount('<main id="main" tabindex="-1"></main>');
+    stop = installDeepLink();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    window.history.replaceState(null, '', '/#main');
+    stop = installDeepLink();
+    expect(document.getElementById('main')).toHaveFocus();
+  });
+
+  it('jumps, focuses and keeps the focus while the page settles', async () => {
+    mount('<section id="now" data-chapter="now"><h2 tabindex="-1">Now</h2></section>');
+    window.history.replaceState(null, '', '/#now');
+    stop = installDeepLink();
+    const heading = screen.getByRole('heading', { name: 'Now' });
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(heading).toHaveFocus();
+    heading.blur();
+    await act(nextTask);
+    expect(heading).toHaveFocus();
   });
 });

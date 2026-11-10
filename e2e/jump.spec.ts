@@ -200,6 +200,57 @@ test('the jump offset uses the measured header height', async ({ page }) => {
   expect(written).toBe(`${measured}px`);
 });
 
+/**
+ * Opens a deep link whose `load` event is held back by a slow image (added at
+ * DOMContentLoaded), so a test can act between the jump and `load`, like an engine (Firefox)
+ * that handles the fragment again later or a web font that swaps late.
+ */
+async function visitDeepLinkWithSlowLoad(page: Page, hash: string) {
+  await page.route('**/__e2e-slow-load.png', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({ status: 204 });
+  });
+  await page.addInitScript(() => {
+    window.localStorage.setItem('portfolio.lang', 'en');
+    document.addEventListener('DOMContentLoaded', () => {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = '/__e2e-slow-load.png';
+      document.body.append(img);
+    });
+  });
+  await page.goto(`/${hash}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#now h2')).toBeFocused();
+  expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
+}
+
+test('a deep link keeps its focus and position while the page finishes loading', async ({
+  page,
+}) => {
+  await visitDeepLinkWithSlowLoad(page, '#now');
+  // What Firefox does at load, and what a late font swap does: focus reset to the document,
+  // and the content above the target grows.
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    document
+      .querySelector<HTMLElement>('[data-chapter="hook"]')
+      ?.style.setProperty('padding-top', '160px');
+  });
+  await page.waitForLoadState('load');
+  await expectLandedOn(page, 'now');
+});
+
+test('once the visitor interacts, settling a deep link stops', async ({ page }) => {
+  await visitDeepLinkWithSlowLoad(page, '#now');
+  await page.keyboard.press('Shift');
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement | null)?.blur();
+  });
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+});
+
 test('without a hash the page stays at the top', async ({ page }) => {
   await visit(page);
   await page.waitForTimeout(300);

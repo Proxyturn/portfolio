@@ -139,8 +139,9 @@ export function handleHashChange(): void {
  * (before paint). If the page is still at the top, scrolls instantly to the hash's jump target
  * (no visible travel, and reduced motion is respected) and focuses its heading. If the page
  * is no longer at the top, the browser has already scrolled (a restored position, or its own
- * fragment scroll) and that position wins: nothing scrolls, but focus still moves to the jump target's heading (without
- * scrolling). Does nothing without a hash.
+ * fragment scroll) and that position wins: nothing scrolls, but focus still moves to the jump
+ * target's heading (without scrolling). Does nothing without a hash. `installDeepLink` calls
+ * it and then keeps the landing while the page finishes loading.
  */
 export function jumpToHashOnLoad(): HTMLElement | null {
   const element = elementForHash(window.location.hash);
@@ -154,6 +155,106 @@ export function jumpToHashOnLoad(): HTMLElement | null {
     return element;
   }
   return null;
+}
+
+/** Visitor input that ends the settling of a deep link: from then on, the visitor is in charge. */
+const INTERACTIONS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+
+/** Upper bound for settling a deep link, so nothing keeps watching a long-open page. */
+export const SETTLE_LIMIT_MS = 10_000;
+
+/** Document position of an element's layout box, ignoring transforms (such as reveal tweens). */
+function layoutTop(element: HTMLElement): number {
+  let top = 0;
+  let node: Element | null = element;
+  while (node instanceof HTMLElement) {
+    top += node.offsetTop;
+    node = node.offsetParent;
+  }
+  return top;
+}
+
+/**
+ * Keeps a deep link's landing while the page finishes loading. Some engines act on the fragment
+ * again later (Firefox scrolls to it at load and resets focus to the document), and late
+ * layout changes such as a web-font swap move the target. So, until the visitor interacts:
+ * - when `focusElement` loses focus to the document, or at `load` and `document.fonts.ready`,
+ *   focus goes back to it (without scrolling), but only while nothing else has focus;
+ * - with `align` (the jump code did the scrolling), a target whose layout position drifted is
+ *   scrolled back by the same distance, so it stays at its scroll margin.
+ * It stops at the first pointerdown, keydown, wheel or touchstart, when the hash no longer
+ * names `target`, after `SETTLE_LIMIT_MS`, or when the returned cleanup runs.
+ */
+export function settleDeepLink(
+  target: HTMLElement,
+  focusElement: HTMLElement,
+  align: boolean,
+): () => void {
+  const startTop = layoutTop(target);
+  const startScroll = window.scrollY;
+  const timers: number[] = [];
+  let done = false;
+
+  const reapply = () => {
+    if (done) return;
+    const element = elementForHash(window.location.hash);
+    if (!element || jumpTargetFor(element) !== target) {
+      stop();
+      return;
+    }
+    const active = document.activeElement;
+    if (!active || active === document.body) focusElement.focus({ preventScroll: true });
+    if (align) {
+      const drift = layoutTop(target) - startTop;
+      if (Math.abs(drift) > 1) {
+        window.scrollTo({ top: startScroll + drift, behavior: 'instant' });
+      }
+    }
+  };
+  const later = () => {
+    timers.push(window.setTimeout(reapply, 0));
+  };
+  const onLoad = () => {
+    reapply();
+    // The engine's own load-time fragment handling may run right after the load event.
+    later();
+  };
+  const stop = () => {
+    if (done) return;
+    done = true;
+    for (const type of INTERACTIONS) window.removeEventListener(type, stop, true);
+    window.removeEventListener('load', onLoad);
+    window.removeEventListener('hashchange', reapply);
+    focusElement.removeEventListener('focusout', later);
+    for (const timer of timers) window.clearTimeout(timer);
+  };
+
+  for (const type of INTERACTIONS) {
+    window.addEventListener(type, stop, { capture: true, passive: true });
+  }
+  window.addEventListener('hashchange', reapply);
+  focusElement.addEventListener('focusout', later);
+  if (document.readyState === 'complete') later();
+  else window.addEventListener('load', onLoad, { once: true });
+  // Not every environment has the Font Loading API.
+  const fonts = (document as { fonts?: FontFaceSet }).fonts;
+  if (fonts) void fonts.ready.then(reapply);
+  timers.push(window.setTimeout(stop, SETTLE_LIMIT_MS));
+  return stop;
+}
+
+/**
+ * Deep link on load, then settling (see `settleDeepLink`). Returns a cleanup for unmount.
+ * Settling only realigns the scroll when the jump code did the scrolling; a position the
+ * browser restored is left alone.
+ */
+export function installDeepLink(): () => void {
+  const scrolledFirst = window.scrollY !== 0;
+  const focused = jumpToHashOnLoad();
+  const element = elementForHash(window.location.hash);
+  const target = element ? jumpTargetFor(element) : null;
+  if (!focused || !target) return () => undefined;
+  return settleDeepLink(target, focused, !scrolledFirst);
 }
 
 /**
