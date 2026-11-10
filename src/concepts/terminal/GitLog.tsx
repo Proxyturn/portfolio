@@ -13,7 +13,7 @@ export function Commit({ job }: { readonly job: Job }) {
 
   return (
     <article className="term-commit" id={`job-${job.id}`} data-job={job.id} data-reveal-group="">
-      <h3 className="term-row term-commit__subject">
+      <h3 className="term-row term-commit__subject" tabIndex={-1}>
         <Line>
           {type && (
             <>
@@ -80,17 +80,20 @@ export function TagEntry({ entry }: { readonly entry: Education }) {
   return (
     <article
       className="term-commit term-commit--tag"
+      id={`edu-${entry.id}`}
       data-education={entry.id}
       data-reveal-group=""
     >
-      <h3 className="term-row term-commit__subject">
-        <Line>
+      {/* One log line; the heading inside it names only the degree, like every other concept. */}
+      <div className="term-row term-commit__subject">
+        <Line block>
           <code lang="en" className="term-tag">
             ({DEGREE_TAG})
           </code>{' '}
-          <span className="term-commit__title">
-            {t(entry.title, lang)} · {entry.institution}
-          </span>
+          <h3 className="term-commit__title term-commit__heading" tabIndex={-1}>
+            {t(entry.title, lang)}
+          </h3>
+          <span className="term-commit__title"> · {entry.institution}</span>
           {entry.graduated && (
             <>
               {' '}
@@ -98,7 +101,7 @@ export function TagEntry({ entry }: { readonly entry: Education }) {
             </>
           )}
         </Line>
-      </h3>
+      </div>
     </article>
   );
 }
@@ -112,7 +115,7 @@ export function EditorPane({ job }: { readonly job: Job }) {
         {EDITOR_TAB[job.id] ?? job.id}
       </p>
       <div className="term-pane__code">
-        <h3 className="term-row term-pane__title">
+        <h3 className="term-row term-pane__title" tabIndex={-1}>
           <Line>
             <span className="term-pane__slashes" aria-hidden="true">
               {'// '}

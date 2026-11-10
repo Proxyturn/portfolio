@@ -58,7 +58,7 @@ function NowLog({ job }: { readonly job: Job }) {
       data-job={job.id}
       data-reveal-group=""
     >
-      <h3 className="term-row term-now__title">
+      <h3 className="term-row term-now__title" tabIndex={-1}>
         <Line>{jobTitle(job, lang)}</Line>
       </h3>
       <p className="term-row term-now__period">
@@ -130,7 +130,7 @@ export function TerminalStory() {
         {/* <Avatar /> */}
         <Window className="term-window--boot">
           <Cmd command={CMD.whoami} />
-          <h1 className="term-row term-out term-hook__name">
+          <h1 className="term-row term-out term-hook__name" tabIndex={-1}>
             <Line>{cv.identity.name}</Line>
           </h1>
           <Cmd command={CMD.role} />
@@ -200,7 +200,7 @@ export function TerminalStory() {
       <ChapterSection id="now" hideTitle className="term-chapter term-now">
         <div className="term-now__stage" data-now-stage="">
           {nowChapter && (
-            <h2 id="now-title" className="term-now__heading">
+            <h2 id="now-title" className="term-now__heading" tabIndex={-1}>
               {t(nowChapter.title, lang)}
             </h2>
           )}
@@ -217,8 +217,13 @@ export function TerminalStory() {
         <Window>
           <Cmd command={CMD.checkout} />
           {course && (
-            <div className="term-branch" data-education={course.id} data-reveal-group="">
-              <h3 className="term-row term-branch__title">
+            <div
+              className="term-branch"
+              id={`edu-${course.id}`}
+              data-education={course.id}
+              data-reveal-group=""
+            >
+              <h3 className="term-row term-branch__title" tabIndex={-1}>
                 <Line>
                   {t(course.title, lang)} · {course.institution}
                 </Line>

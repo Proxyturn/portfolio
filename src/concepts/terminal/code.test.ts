@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CHIP_CMD, isoMonth, LINK_CMD } from './code';
-import { readSource } from './readSource';
+import { readSource } from '../../test/readSource';
 
 let css = '';
 beforeAll(async () => {
-  css = await readSource('./terminal.css');
+  css = await readSource('./terminal.css', import.meta.url);
 });
 
 /** The `content` value set by a rule whose selector list ends with `selector`. */

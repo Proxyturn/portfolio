@@ -9,7 +9,7 @@ import { renderWithLang } from '../../test/render';
 import { setReducedMotion } from '../../test/setup';
 import { CMD, isoMonth, LINK_CMD, OPS_LOG, STACK_LINE } from './code';
 import { TerminalStory } from './TerminalStory';
-import { restoreRects, stubRects } from './testLayout';
+import { restoreRects, stubRects } from '../../test/layout';
 
 const GIT_LOG_CHAPTERS = ['origins', 'enterprise', 'energy'] as const;
 
@@ -258,6 +258,25 @@ describe('TerminalStory', () => {
     ).toBeInTheDocument();
     expect(container.querySelectorAll('.term-todo__status')[0]).toHaveTextContent(
       ptBR.story.inProgress,
+    );
+  });
+
+  it('keeps the jump contract: job-/edu- ids and a focusable heading in every target', () => {
+    const { container } = renderWithLang(<TerminalStory />);
+    for (const job of cv.jobs) {
+      const entry = container.querySelector(`[data-job="${job.id}"]`);
+      expect(entry?.id).toBe(`job-${job.id}`);
+      expect(entry?.querySelector('h3')).toHaveAttribute('tabindex', '-1');
+    }
+    for (const entry of cv.education) {
+      const el = container.querySelector(`[data-education="${entry.id}"]`);
+      expect(el?.id).toBe(`edu-${entry.id}`);
+      expect(el?.querySelector('h3')).toHaveAttribute('tabindex', '-1');
+    }
+    expect(screen.getByRole('heading', { level: 1 })).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('heading', { level: 2, name: 'Now' })).toHaveAttribute(
+      'tabindex',
+      '-1',
     );
   });
 

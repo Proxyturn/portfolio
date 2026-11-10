@@ -4,14 +4,14 @@ import { renderWithLang } from '../../test/render';
 import { setReducedMotion } from '../../test/setup';
 import { en } from '../../i18n/en';
 import { ptBR } from '../../i18n/pt-BR';
-import { readSource } from './readSource';
+import { readSource } from '../../test/readSource';
 import { TerminalStory } from './TerminalStory';
 
 let fontsCss = '';
 let terminalCss = '';
 beforeAll(async () => {
-  fontsCss = await readSource('./fonts.css');
-  terminalCss = await readSource('./terminal.css');
+  fontsCss = await readSource('./fonts.css', import.meta.url);
+  terminalCss = await readSource('./terminal.css', import.meta.url);
 });
 
 /** Every `unicode-range` declared in fonts.css, as [from, to] code-point pairs. */

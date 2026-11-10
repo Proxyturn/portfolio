@@ -40,16 +40,9 @@ html:root[data-theme='terminal'] {
 /* Story, chapters, windows                                                                    */
 /* ------------------------------------------------------------------------------------------ */
 
+/* A plain page: the only glow sits behind the boot screen (.term-hook), never page-tall. */
 .terminal {
-  /* Static texture: one soft glow behind the boot screen, no tiles across the page. */
-  background:
-    radial-gradient(
-        ellipse 70% 40% at 50% 0%,
-        color-mix(in srgb, var(--color-accent) 7%, transparent),
-        transparent 70%
-      )
-      no-repeat,
-    var(--color-bg);
+  background: var(--color-bg);
 }
 
 .terminal a {
@@ -310,6 +303,12 @@ html:root[data-theme='terminal'] {
   margin: 0;
   font-family: var(--font-mono);
   font-weight: 600;
+}
+
+/* The degree's heading sits inline in its log line. */
+.terminal .term-commit__heading {
+  display: inline;
+  font: inherit;
 }
 
 .term-commit__type {
@@ -584,7 +583,10 @@ html:root[data-theme='terminal'] {
   cursor: pointer;
 }
 
-/* Must match CHIP_CMD in code.ts. Generated content is part of the button's accessible name. */
+/*
+ * Must match CHIP_CMD in code.ts. `grep ` is visible text, so it is part of the button's
+ * accessible name ("grep Xamarin"), which then contains everything the chip shows (WCAG 2.5.3).
+ */
 .terminal .skills__chip::before {
   content: 'grep ';
   color: var(--color-text-muted);

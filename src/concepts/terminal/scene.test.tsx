@@ -10,8 +10,9 @@ import {
   revealLines,
   runScene,
 } from './scene';
+import type { ChapterId } from '../../content/types';
 import { TerminalStory } from './TerminalStory';
-import { restoreRects, stubRects } from './testLayout';
+import { restoreRects, stubRects } from '../../test/layout';
 
 /** Runs a scene inside a context, as useScrollScene does, and returns its revert. */
 function inContext(run: () => void) {
@@ -42,15 +43,29 @@ function layout({ line = 5000, now = 4000, stage = 300 }: Layout) {
   });
 }
 
-function story(): HTMLElement {
-  const { container } = renderWithLang(<TerminalStory />);
-  return container.firstElementChild as HTMLElement;
+const fixtures: HTMLElement[] = [];
+
+/**
+ * The story's real markup, cut down to the chapters a test needs. GSAP and ScrollTrigger read
+ * computed styles for every line they touch, which jsdom computes slowly; the whole story (about
+ * a hundred lines) took seconds per test on a busy machine. A static copy is enough here: the
+ * scenes only read and animate the markup.
+ */
+function story(...chapters: ChapterId[]): HTMLElement {
+  const { container, unmount } = renderWithLang(<TerminalStory />);
+  const root = (container.firstElementChild as HTMLElement).cloneNode(true) as HTMLElement;
+  unmount();
+  for (const section of root.querySelectorAll<HTMLElement>('[data-chapter]')) {
+    if (!chapters.includes(section.dataset.chapter as ChapterId)) section.remove();
+  }
+  document.body.append(root);
+  fixtures.push(root);
+  return root;
 }
 
 const pinsOf = (el: Element | null) => ScrollTrigger.getAll().filter((st) => st.pin === el);
 
-// GSAP reads computed styles for every line it hides, which jsdom computes slowly (the story has
-// about a hundred lines). Real browsers take milliseconds; give jsdom room under coverage.
+// jsdom computes styles slowly; the fixtures stay small (see story()), with room for a busy machine.
 describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
   beforeEach(() => {
     // The story itself stays static; the tests drive the scenes directly.
@@ -58,11 +73,12 @@ describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
   });
   afterEach(() => {
     restoreRects();
+    for (const fixture of fixtures.splice(0)) fixture.remove();
   });
 
   it('hides lines below the fold until their trigger, a whole line at a time', () => {
     layout({ line: window.innerHeight * 2 });
-    const root = story();
+    const root = story('hook', 'origins');
     const line = root.querySelector<HTMLElement>('#job-novus .term-line');
     const revert = inContext(() => {
       revealLines(root);
@@ -81,7 +97,7 @@ describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
   it('never hides a line that is already on screen or above it when the scene loads', () => {
     // Even below the reveal line (90%), a line that is on screen stays as it is.
     layout({ line: window.innerHeight - 1 });
-    const root = story();
+    const root = story('origins', 'energy', 'next');
     const revert = inContext(() => {
       revealLines(root);
     });
@@ -94,7 +110,7 @@ describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
 
   it('leaves the lines of an excluded (pinned) stage to the pin', () => {
     layout({});
-    const root = story();
+    const root = story('origins', 'now');
     const stage = root.querySelector<HTMLElement>('[data-now-stage]');
     const revert = inContext(() => {
       revealLines(root, stage);
@@ -107,7 +123,7 @@ describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
 
   it('pins the "Now" stage where the chapter nav lands and scrubs its log lines', () => {
     layout({});
-    const root = story();
+    const root = story('now');
     const section = root.querySelector<HTMLElement>('#now');
     const stage = section?.querySelector<HTMLElement>('[data-now-stage]') ?? null;
     let pinned: HTMLElement | null = null;
@@ -117,8 +133,12 @@ describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
     expect(pinned).toBe(stage);
     const [trigger] = pinsOf(stage);
     expect(trigger?.trigger).toBe(section);
-    // jsdom has no scroll-margin, so the pin starts when the section reaches the very top.
-    expect(trigger?.vars.start).toBe('top top+=0');
+    // The start re-reads the section's scroll margin (`var(--jump-offset)`) on every refresh.
+    const start = trigger?.vars.start as () => string;
+    expect(typeof start).toBe('function');
+    expect(start()).toBe('top top+=0');
+    section?.style.setProperty('scroll-margin-top', '84px');
+    expect(start()).toBe('top top+=84');
     // Only the log lines are scrubbed; the title, period and command stay visible.
     for (const line of stage?.querySelectorAll<HTMLElement>('.term-line') ?? []) {
       const scrubbed = line.hasAttribute('data-scrub');
@@ -138,7 +158,7 @@ describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
     ]) {
       restoreRects();
       layout(case_);
-      const root = story();
+      const root = story('now');
       let pinned: HTMLElement | null = root;
       const revert = inContext(() => {
         pinned = pinNowWindow(root);
@@ -151,7 +171,7 @@ describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
 
   it('runs every scene, with or without the pin', () => {
     layout({});
-    const root = story();
+    const root = story('origins', 'now', 'next');
     const stage = root.querySelector('[data-now-stage]');
     const title = root.querySelector<HTMLElement>('.term-now__title .term-line');
     const revertPinned = inContext(() => {
@@ -173,7 +193,7 @@ describe('Terminal scroll scenes', { timeout: 20_000 }, () => {
 
   it('fills the deploy bar with scaleX only, scrubbed by the scroll', () => {
     layout({});
-    const root = story();
+    const root = story('next');
     const fill = root.querySelector<HTMLElement>('.term-deploy__fill');
     const revert = inContext(() => {
       fillDeployBar(root);

@@ -3,7 +3,7 @@
  * and the upright weight axis are declared: EN and PT-BR need nothing beyond U+0000-00FF plus
  * general punctuation, so the Vietnamese, Latin Extended, Cyrillic, Greek, italic and width
  * files are never referenced and never shipped. The unicode-range values are copied from each
- * package's wght.css; fonts.test.ts checks that every character the story can show is inside
+ * package's wght.css; fonts.test.tsx checks that every character the story can show is inside
  * them. (The arrow U+2192 is not, so the story draws it as SVG; see parts.tsx.)
  */
 @font-face {

@@ -103,8 +103,8 @@ export function revealLines(root: HTMLElement, exclude: HTMLElement | null = nul
 
 /**
  * Pins the "Now" stage (its title and the `tail -f` window) and scrubs its log lines with the
- * scroll. The pin starts exactly where the chapter nav lands (the section's scroll margin
- * below the top), so a jump to "Now" lands at the top of the pinned section. Returns the
+ * scroll. The pin starts exactly where a jump lands (the section's scroll margin below the
+ * top, re-read on every refresh), so a jump to "Now" lands at the top of the pinned section. Returns the
  * pinned stage, or null when it is not pinned: when the section is already on screen or above
  * it (the scene loaded late), or when the stage would not fit in the viewport.
  */
@@ -114,9 +114,11 @@ export function pinNowWindow(root: HTMLElement): HTMLElement | null {
   if (!section || !stage) return null;
   const top = section.getBoundingClientRect().top;
   if (top < window.innerHeight) return null;
-  const offset = parseFloat(getComputedStyle(section).scrollMarginTop) || 0;
+  // The section's scroll margin is `var(--jump-offset)`: the measured sticky header plus a gap.
+  // It changes at runtime (the header is re-measured), so it is read again on every refresh.
+  const jumpOffset = () => parseFloat(getComputedStyle(section).scrollMarginTop) || 0;
   const box = stage.getBoundingClientRect();
-  if (offset + (box.top - top) + box.height > window.innerHeight) return null;
+  if (jumpOffset() + (box.top - top) + box.height > window.innerHeight) return null;
 
   const blink = createBlinker();
   const cursor = stage.querySelector('.term-cursor');
@@ -124,7 +126,7 @@ export function pinNowWindow(root: HTMLElement): HTMLElement | null {
     defaults: { ease: 'none' },
     scrollTrigger: {
       trigger: section,
-      start: `top top+=${offset}`,
+      start: () => `top top+=${jumpOffset()}`,
       end: () => `+=${Math.round(window.innerHeight * PIN_LENGTH)}`,
       pin: stage,
       scrub: true,
