@@ -1,7 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App } from '../../App';
 import { cv } from '../../content/cv';
 import { en } from '../../i18n/en';
 import { gsap, ScrollTrigger } from '../../motion/gsap';
@@ -55,6 +54,10 @@ describe('WorldsStory', () => {
     expect(between?.querySelector('.worlds-card__eyebrow')).toHaveTextContent(
       en.worlds.districts.betweenWorlds,
     );
+    for (const section of container.querySelectorAll('[data-chapter]')) {
+      expect(section.firstElementChild, section.id).toHaveClass('chapter__eyebrow');
+    }
+    expect(container.querySelector('#hook .chapter__eyebrow')).toHaveTextContent(en.worlds.title);
     expect(container.querySelectorAll('.worlds-back')).toHaveLength(8);
     // A vignette opens every chapter but the hook (shown in the overview layout only).
     expect(container.querySelectorAll('[data-chapter] .worlds-vignette')).toHaveLength(8);
@@ -199,67 +202,5 @@ describe('WorldsStory', () => {
     });
     expect(scale()).toBeCloseTo(zoomed, 5);
     expect(document.querySelector('#world-map svg')?.getAttribute('data-active')).toBe('energy');
-  });
-
-  it('lands on the deep link again once the web fonts are in, unless the visitor took over', async () => {
-    setReducedMotion(true);
-    window.history.replaceState(null, '', '/#now');
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    });
-    let ready: () => void = () => undefined;
-    const fonts = () => {
-      Object.defineProperty(document, 'fonts', {
-        configurable: true,
-        value: { ready: new Promise<void>((resolve) => (ready = resolve)) },
-      });
-    };
-    const fontsIn = () =>
-      act(async () => {
-        ready();
-        await Promise.resolve();
-      });
-    // After the load jump the target sits at its scroll margin (jsdom: 0 and 0), scrolled down.
-    let scrollY = 0;
-    vi.spyOn(window, 'scrollY', 'get').mockImplementation(() => scrollY);
-    scrollIntoView.mockImplementation(() => {
-      scrollY = 500;
-    });
-    try {
-      // The load jump put the target at its margin: land again after the swap.
-      fonts();
-      let view = renderWithLang(<App />);
-      expect(scrollIntoView).toHaveBeenCalledTimes(1);
-      await fontsIn();
-      expect(scrollIntoView).toHaveBeenCalledTimes(2);
-      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'start', behavior: 'instant' });
-      view.unmount();
-
-      // A visitor's input in the meantime cancels it.
-      scrollIntoView.mockClear();
-      scrollY = 0;
-      fonts();
-      view = renderWithLang(<App />);
-      fireEvent.keyDown(window, { key: 'ArrowDown' });
-      await fontsIn();
-      expect(scrollIntoView).toHaveBeenCalledTimes(1);
-      view.unmount();
-
-      // The browser restored a scroll position (the load jump stepped aside): leave it.
-      scrollIntoView.mockClear();
-      scrollY = 500;
-      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-        top: 900,
-      } as DOMRect);
-      fonts();
-      renderWithLang(<App />);
-      await fontsIn();
-      expect(scrollIntoView).not.toHaveBeenCalled();
-    } finally {
-      delete (document as { fonts?: unknown }).fonts;
-      delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
-    }
   });
 });

@@ -175,12 +175,8 @@ html:root[data-theme='worlds'] {
   margin-bottom: 1.25rem;
 }
 
-/*
- * The district name is visible text above the chapter heading (CSS order for now; it moves
- * before the heading in the DOM once ChapterSection's `eyebrow` prop lands on main).
- */
-.worlds-district {
-  order: -1;
+/* The district name: ChapterSection's eyebrow, before the heading in the DOM too. */
+.worlds-chapter .chapter__eyebrow {
   margin: 0 0 0.4rem;
   color: var(--color-accent);
   font-family: var(--font-display);
@@ -190,9 +186,12 @@ html:root[data-theme='worlds'] {
   font-size: 0.85rem;
 }
 
-/* Overview only: each chapter opens with a small static picture of its district. */
+/*
+ * Overview only: each chapter opens with a small static picture of its district, drawn above
+ * the eyebrow (it is aria-hidden, so the reading order is unchanged).
+ */
 .worlds-vignette {
-  order: -2;
+  order: -1;
   display: block;
   width: auto;
   max-width: min(100%, 22rem);

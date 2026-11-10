@@ -506,6 +506,63 @@ test.describe('jumps', () => {
     await expect(page.locator('#world-map a').first()).toBeFocused();
   });
 
+  /** scrollY sampled over `ms`: one value means nothing moved the page (no realign fight). */
+  async function scrollSamples(page: Page, ms: number): Promise<number[]> {
+    return page.evaluate(
+      (duration) =>
+        new Promise<number[]>((resolve) => {
+          const seen = new Set<number>();
+          const end = performance.now() + duration;
+          const tick = () => {
+            seen.add(Math.round(window.scrollY));
+            if (performance.now() < end) requestAnimationFrame(tick);
+            else resolve([...seen]);
+          };
+          requestAnimationFrame(tick);
+        }),
+      ms,
+    );
+  }
+
+  test('Back to the map, wide overview: lands below the header and stays put', async ({
+    page,
+  }, testInfo) => {
+    test.skip(isMobile(testInfo.project.name), 'Sizes are set explicitly.');
+    await page.setViewportSize(SHORT);
+    await visit(page);
+    await page.locator('#breadth').scrollIntoViewIfNeeded();
+    await page.locator('#breadth .worlds-back').click();
+    await expect(page).toHaveURL(/#world-map$/);
+    await expectLanded(page, 'world-map');
+    await expect(page.locator('#world-map-title')).toBeFocused();
+    expect(await scrollSamples(page, 1500)).toHaveLength(1);
+  });
+
+  for (const [label, size] of [
+    ['desktop', DESKTOP],
+    ['tablet strip', STRIP],
+  ] as const) {
+    test(`deep link /#world-map in the sticky ${label} layout: the stage stays under the header, nothing fights`, async ({
+      page,
+    }, testInfo) => {
+      test.skip(isMobile(testInfo.project.name), 'Sizes are set explicitly.');
+      await page.setViewportSize(size);
+      await page.addInitScript(() => {
+        window.localStorage.setItem('portfolio.lang', 'en');
+      });
+      await page.goto('/#world-map');
+      await expect(page.locator('#world-map')).toBeAttached();
+      await expect(page.locator('#world-map-title')).toBeFocused();
+      await page.waitForTimeout(500);
+      expect(await scrollSamples(page, 1500)).toHaveLength(1);
+      const stage = await page.evaluate(() => ({
+        top: document.querySelector('.worlds__stage')?.getBoundingClientRect().top ?? -1,
+        header: document.querySelector('.site-header')?.getBoundingClientRect().bottom ?? 0,
+      }));
+      expect(stage.top).toBeGreaterThanOrEqual(stage.header - 1);
+    });
+  }
+
   for (const [label, size] of [
     ['desktop', DESKTOP],
     ['tablet strip', STRIP],
@@ -937,18 +994,26 @@ test('every chapter shows its district name above its heading', async ({ page })
   await visit(page);
   const order = await page.evaluate(() =>
     [...document.querySelectorAll<HTMLElement>('[data-chapter]')].map((section) => {
-      const district = section.querySelector('.worlds-district');
+      const district = section.querySelector('.chapter__eyebrow');
       const heading = section.querySelector('h1, h2');
       return {
         id: section.id,
+        // On screen above the heading, and before it in the DOM (read first).
         above:
           !!district &&
           !!heading &&
           district.getBoundingClientRect().bottom <= heading.getBoundingClientRect().top + 1,
+        first:
+          !!district &&
+          !!heading &&
+          !!(district.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING),
       };
     }),
   );
-  expect(order.every((c) => c.above)).toBe(true);
+  expect(
+    order.every((c) => c.above && c.first),
+    JSON.stringify(order),
+  ).toBe(true);
   // The ATOS Jan–Jun 2023 entry: its own neutral "Between worlds" panel.
   const between = page.locator('[data-job="atos-frontend"]');
   await expect(between.locator('.worlds-card__eyebrow')).toHaveText(

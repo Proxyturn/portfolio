@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChapterSection } from '../../components/ChapterSection';
 import { ContactSection } from '../../components/contact/ContactSection';
-import { elementForHash, jumpTargetFor } from '../../components/jump';
 import { SkillsExplorer } from '../../components/SkillsExplorer';
 // import { Avatar } from '../../components/Avatar';
 import { cv } from '../../content/cv';
@@ -52,55 +51,15 @@ function useLazyScene(enabled: boolean): Scene | null {
   return enabled ? scene : null;
 }
 
-/**
- * A deep link lands before the web fonts swap in; the swap reflows the text above the target
- * (measured: about 25 px lower on a 4,000 px page), so the heading drifts off its scroll margin.
- * When the fonts are ready and nobody has given any input since, land on the hash's target
- * again. Only when the load jump put the target at its scroll margin: when the browser restored
- * a scroll position instead, that position wins, as in jump.ts.
- * TODO(main): drop this once jump.ts re-applies the landing after the fonts load (shared change
- * in progress on main).
- */
-function useReanchorAfterFonts(): void {
-  useEffect(() => {
-    if (!('fonts' in document)) return undefined;
-    const hash = window.location.hash;
-    const element = elementForHash(hash);
-    const target = element ? jumpTargetFor(element) : null;
-    const landed =
-      !!target &&
-      window.scrollY !== 0 &&
-      Math.abs(
-        target.getBoundingClientRect().top - parseFloat(getComputedStyle(target).scrollMarginTop),
-      ) <= 2;
-    let active = landed;
-    // Any input means the visitor has taken over; scroll anchoring may still move scrollY.
-    const INPUT = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
-    const stop = () => {
-      active = false;
-    };
-    for (const type of INPUT) window.addEventListener(type, stop, { passive: true, once: true });
-    void document.fonts.ready.then(() => {
-      if (!active || window.location.hash !== hash) return;
-      target?.scrollIntoView({ block: 'start', behavior: 'instant' });
-    });
-    return () => {
-      active = false;
-      for (const type of INPUT) window.removeEventListener(type, stop);
-    };
-  }, []);
-}
-
 type DistrictName = keyof Dictionary['worlds']['districts'];
 
 /** Each chapter's palette, the district name above its heading, and its overview vignette. */
 const CHAPTER_DISTRICT: Readonly<
   Record<
-    ChapterId,
-    { palette: DistrictId; name: DistrictName | null; vignette: readonly BuildingId[] }
+    Exclude<ChapterId, 'hook'>,
+    { palette: DistrictId; name: DistrictName; vignette: readonly BuildingId[] }
   >
 > = {
-  hook: { palette: 'neutral', name: null, vignette: [] },
   origins: { palette: 'industrial', name: 'industrial', vignette: ['factory', 'university'] },
   enterprise: { palette: 'banking', name: 'banking', vignette: ['bank', 'plaza'] },
   energy: { palette: 'energy', name: 'energy', vignette: ['plant', 'substation'] },
@@ -154,8 +113,6 @@ export function WorldsStory() {
     };
   }, [scene, arrangement]);
 
-  useReanchorAfterFonts();
-
   // Text reflows when the language changes: re-measure the chapter positions.
   useEffect(() => {
     if (scene) ScrollTrigger.refresh();
@@ -169,10 +126,11 @@ export function WorldsStory() {
   const chapter = (id: Exclude<ChapterId, 'hook'>, children: ReactNode) => {
     const district = CHAPTER_DISTRICT[id];
     return (
-      <ChapterSection id={id} className={`worlds-chapter wd-${district.palette}`}>
-        {/* TODO(main): use ChapterSection's `eyebrow` prop once it lands, so the district
-            name precedes the heading in the DOM too (today: visually, with CSS order). */}
-        {district.name && <p className="worlds-district">{dict.worlds.districts[district.name]}</p>}
+      <ChapterSection
+        id={id}
+        className={`worlds-chapter wd-${district.palette}`}
+        eyebrow={dict.worlds.districts[district.name]}
+      >
         <Vignette buildings={district.vignette} />
         <div className="worlds-entries">{children}</div>
         <a className="worlds-back" href={`#${WORLD_MAP_ID}`}>
@@ -185,9 +143,13 @@ export function WorldsStory() {
   return (
     <div ref={root} className="worlds">
       <div className="worlds__intro">
-        <ChapterSection id="hook" hideTitle className="worlds-chapter worlds-hook wd-neutral">
+        <ChapterSection
+          id="hook"
+          hideTitle
+          className="worlds-chapter worlds-hook wd-neutral"
+          eyebrow={dict.worlds.title}
+        >
           {/* <Avatar /> */}
-          <p className="worlds-district">{dict.worlds.title}</p>
           <h1 tabIndex={-1}>{cv.identity.name}</h1>
           <p className="worlds-hook__role">
             {t(cv.role, lang)} · {t(cv.identity.location, lang)}
