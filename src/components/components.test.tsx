@@ -175,5 +175,16 @@ describe('ChapterSection', () => {
     expect(container.querySelector('[data-chapter="energy"]')?.firstElementChild?.tagName).toBe(
       'H2',
     );
+
+    for (const empty of ['', null, false]) {
+      rerender(
+        <LanguageProvider initial="en">
+          <ChapterSection id="energy" eyebrow={empty}>
+            <p>Body</p>
+          </ChapterSection>
+        </LanguageProvider>,
+      );
+      expect(container.querySelector('.chapter__eyebrow')).toBeNull();
+    }
   });
 });

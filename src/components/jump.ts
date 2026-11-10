@@ -164,11 +164,42 @@ export function jumpToHashOnLoad(): HTMLElement | null {
 /** Visitor input that ends the settling of a deep link: from then on, the visitor is in charge. */
 const INTERACTIONS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
 
-/** Upper bound for settling a deep link, so nothing keeps watching a long-open page. */
+/** Settling lasts at least this long after it starts… */
 export const SETTLE_LIMIT_MS = 10_000;
+
+/** …and at least this long after `load` (whichever ends later). */
+export const SETTLE_AFTER_LOAD_MS = 3_000;
+
+/** Hard stop for a page that never finishes loading. */
+export const SETTLE_HARD_LIMIT_MS = 30_000;
 
 /** Upper bound for realigning scrolls while settling, so settling can never fight a scene. */
 export const SETTLE_MAX_REALIGNS = 20;
+
+/**
+ * How long the page must stay still after a scroll that isn't ours before settling decides
+ * what it was (a smooth scroll fires many `scroll` events; a find-in-page jump fires one).
+ */
+export const SETTLE_SCROLL_QUIET_MS = 150;
+
+/** An element's rendered top, minus its own scroll margin (0 when it sits exactly there). */
+function offMargin(element: Element): number {
+  const margin = parseFloat(getComputedStyle(element).scrollMarginTop) || 0;
+  return element.getBoundingClientRect().top - margin;
+}
+
+/** True when an element's rendered top is at its own scroll margin (within 2 px). */
+function atScrollMargin(element: Element): boolean {
+  return Math.abs(offMargin(element)) <= 2;
+}
+
+/**
+ * True when the page's bottom explains where an element is: it is at or below its scroll
+ * margin (it couldn't scroll any higher) and still inside the viewport.
+ */
+function clampedAtBottom(element: Element): boolean {
+  return offMargin(element) >= -2 && element.getBoundingClientRect().top < window.innerHeight;
+}
 
 /** Vertical translation of an element's own transform (0 without one). */
 function translateY(element: Element): number {
@@ -190,6 +221,15 @@ function documentTop(element: HTMLElement): number {
     shift += translateY(node);
   }
   return element.getBoundingClientRect().top + window.scrollY - shift;
+}
+
+/** True when the element or an ancestor is `position: sticky` or `fixed` right now. */
+export function insideStickyOrFixed(element: Element): boolean {
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    const { position } = getComputedStyle(node);
+    if (position === 'sticky' || position === 'fixed') return true;
+  }
+  return false;
 }
 
 /**
@@ -215,13 +255,38 @@ export function scrollToLanding(target: HTMLElement): void {
  * - focus: when `focusElement` loses focus to the document, at `load` (and one task later)
  *   and at `document.fonts.ready`, focus goes back to it without scrolling, but only while
  *   nothing else has focus;
- * - position, with `align` (the jump code did the scrolling): at those same moments and on
- *   layout changes (a ResizeObserver on the root and body, at most one check per frame), if
- *   the target is more than 1 px away from its landing, the page scrolls there instantly.
- *   Scrolling doesn't resize anything, so it can't retrigger itself, and it gives up after
- *   `SETTLE_MAX_REALIGNS` scrolls.
+ * - position, only with `align`: at those same moments and on layout changes (a
+ *   ResizeObserver on the root and body when one of their heights changes, at most one check
+ *   per frame), if the target is more
+ *   than 1 px away from its landing, the page scrolls there instantly. Scrolling doesn't
+ *   resize anything, so it can't retrigger itself, and it gives up after `SETTLE_MAX_REALIGNS`
+ *   scrolls.
+ * - when the page is no longer where this code last put or confirmed it:
+ *   - in a check that a layout change triggered (the ResizeObserver saw the root's or the
+ *     body's height change), a move no larger than that change is that reflow's scroll
+ *     anchoring (a web-font swap, a pin spacer): anchoring
+ *     compensates for what changed above its anchor node but not for what changed between
+ *     the anchor and the target, so the page moves while the target ends off its margin. It
+ *     is realigned whatever the geometry, like a reflow without anchoring.
+ *   - otherwise it is a scroll, classified by geometry. It is an engine's fragment scroll
+ *     when the element the hash names, or the target, sits at its own scroll margin, or the
+ *     page is at its bottom with one of them visible at or below its margin (the clamp
+ *     explains the position): it is realigned to the target's landing, however far the
+ *     fragment's element is from the target's top (a heading under a vignette, say).
+ *     Anything else (find in page, browse mode, a scrollbar drag, a late scroll restore)
+ *     ends aligning for good, near or far, while focus keeps being re-applied. Scroll events
+ *     while a layout check is pending are left to that check.
+ *   Scrolls are judged once the page has been still for `SETTLE_SCROLL_QUIET_MS`, so a smooth
+ *   fragment scroll (`scroll-behavior: smooth`) is judged where it ends, and a check that runs
+ *   before a scroll's `scroll` event waits for it the same way. (A smooth fragment scroll is
+ *   therefore allowed to finish and then corrected in one instant step, rather than cancelled
+ *   at its first step: a first step can't be told apart from a short find-in-page jump.)
+ *   Accepted false positives, each costing a small correction: a no-input scroll that happens
+ *   to leave the hash's element or the target within 2 px of its margin is realigned, and so
+ *   is one followed within `SETTLE_SCROLL_QUIET_MS` by a reflow at least as tall as the scroll.
  * It stops at the first pointerdown, keydown, wheel or touchstart, when the hash no longer
- * names `target`, after `SETTLE_LIMIT_MS`, or when the returned cleanup runs.
+ * names `target`, at the later of `SETTLE_LIMIT_MS` after it starts and `SETTLE_AFTER_LOAD_MS`
+ * after `load` (`SETTLE_HARD_LIMIT_MS` at most), or when the returned cleanup runs.
  */
 export function settleDeepLink(
   target: HTMLElement,
@@ -229,11 +294,58 @@ export function settleDeepLink(
   align: boolean,
 ): () => void {
   const timers: number[] = [];
+  const started = Date.now();
+  let aligning = align;
+  let expectedY = window.scrollY;
   let frame = 0;
+  let quiet = 0;
   let realigns = 0;
   let done = false;
 
-  const reapply = () => {
+  /** Scrolls instantly to the landing (if not there yet) and confirms the position. */
+  const realign = () => {
+    if (realigns >= SETTLE_MAX_REALIGNS) return;
+    const landing = landingScrollY(target);
+    if (Math.abs(window.scrollY - landing) > 1) {
+      realigns += 1;
+      window.scrollTo({ top: landing, behavior: 'instant' });
+    }
+    expectedY = window.scrollY;
+  };
+  const movedByOthers = () => Math.abs(window.scrollY - expectedY) > 1;
+  /** Where an engine's own fragment scroll (or scroll anchoring) leaves the page. */
+  const fragmentGeometry = () => {
+    const named = elementForHash(window.location.hash);
+    const bottom = document.documentElement.scrollHeight - window.innerHeight;
+    return (
+      (named !== null && atScrollMargin(named)) ||
+      atScrollMargin(target) ||
+      (window.scrollY >= bottom - 1 &&
+        ((named !== null && clampedAtBottom(named)) || clampedAtBottom(target)))
+    );
+  };
+  /** Runs once the page has been still after a scroll that isn't ours. */
+  const decide = () => {
+    quiet = 0;
+    if (done || !aligning) return;
+    // Back where it was: catch up on any layout change skipped while waiting.
+    if (!movedByOthers() || fragmentGeometry()) realign();
+    else stopAligning();
+  };
+  const waitUntilQuiet = () => {
+    if (quiet) window.clearTimeout(quiet);
+    quiet = window.setTimeout(decide, SETTLE_SCROLL_QUIET_MS);
+  };
+
+  /**
+   * One check. `layoutChange` is how much the page's height changed when the ResizeObserver
+   * triggered it, and 0 otherwise. A page move no larger than that change is its scroll
+   * anchoring, not a scroll, and the target is realigned whatever the geometry; a larger one
+   * can't come from it (a visitor's scroll around the same moment) and is judged as a scroll.
+   * `document.fonts.ready` runs a plain check: it resolves even when no font changed (WebKit,
+   * after load), and a swap's reflow reaches the ResizeObserver anyway.
+   */
+  const reapply = (layoutChange = 0) => {
     if (done) return;
     const element = elementForHash(window.location.hash);
     if (!element || jumpTargetFor(element) !== target) {
@@ -242,64 +354,119 @@ export function settleDeepLink(
     }
     const active = document.activeElement;
     if (!active || active === document.body) focusElement.focus({ preventScroll: true });
-    if (align && realigns < SETTLE_MAX_REALIGNS) {
-      const landing = landingScrollY(target);
-      if (Math.abs(window.scrollY - landing) > 1) {
-        realigns += 1;
-        window.scrollTo({ top: landing, behavior: 'instant' });
-      }
+    if (!aligning) return;
+    const moved = Math.abs(window.scrollY - expectedY);
+    const byLayout = layoutChange > 0 && moved <= layoutChange + 1;
+    if (moved > 1 && !byLayout) {
+      // Someone else moved the page (its scroll event may not even have fired yet).
+      if (fragmentGeometry()) realign();
+      else waitUntilQuiet();
+    } else if (!quiet || byLayout) {
+      realign();
     }
   };
-  const later = () => {
-    timers.push(window.setTimeout(reapply, 0));
+  const check = () => {
+    reapply();
   };
-  const nextFrame = () => {
+  const later = () => {
+    timers.push(window.setTimeout(check, 0));
+  };
+  /** The largest height change seen since the last layout check ran. */
+  let layoutChange = 0;
+  const nextFrame = (change: number) => {
+    layoutChange = Math.max(layoutChange, change);
     if (!frame) {
       frame = window.requestAnimationFrame(() => {
         frame = 0;
-        reapply();
+        const changed = layoutChange;
+        layoutChange = 0;
+        reapply(changed);
       });
     }
+  };
+  /**
+   * Last seen heights of the root and body. A layout check runs only when one of them
+   * changed: the observer's first notification (sent for every observed element) only
+   * records them, so it is never taken for a layout change.
+   */
+  const heights = new Map<Element, number>();
+  const onResize = (entries: readonly ResizeObserverEntry[]) => {
+    let change = 0;
+    for (const entry of entries) {
+      const height = entry.contentRect.height;
+      const previous = heights.get(entry.target);
+      heights.set(entry.target, height);
+      if (previous !== undefined) change = Math.max(change, Math.abs(height - previous));
+    }
+    if (change > 0.5) nextFrame(change);
+  };
+  const observer =
+    align && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
+  const onScroll = () => {
+    if (done || !aligning || frame || !movedByOthers()) return;
+    waitUntilQuiet();
+  };
+  const stopAligning = () => {
+    aligning = false;
+    observer?.disconnect();
+    window.removeEventListener('scroll', onScroll);
+    if (quiet) window.clearTimeout(quiet);
+    quiet = 0;
+  };
+  const stopAt = (time: number) => {
+    timers.push(window.setTimeout(stop, Math.max(0, time - Date.now())));
   };
   const onLoad = () => {
     reapply();
     // The engine's own load-time fragment handling may run right after the load event.
     later();
+    stopAt(Math.max(started + SETTLE_LIMIT_MS, Date.now() + SETTLE_AFTER_LOAD_MS));
   };
-  const observer =
-    align && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(nextFrame) : null;
   const stop = () => {
     if (done) return;
     done = true;
     for (const type of INTERACTIONS) window.removeEventListener(type, stop, true);
     window.removeEventListener('load', onLoad);
-    window.removeEventListener('hashchange', reapply);
+    window.removeEventListener('hashchange', check);
+    window.removeEventListener('scroll', onScroll);
     focusElement.removeEventListener('focusout', later);
     observer?.disconnect();
     if (frame) window.cancelAnimationFrame(frame);
+    if (quiet) window.clearTimeout(quiet);
     for (const timer of timers) window.clearTimeout(timer);
   };
 
   for (const type of INTERACTIONS) {
     window.addEventListener(type, stop, { capture: true, passive: true });
   }
-  window.addEventListener('hashchange', reapply);
+  window.addEventListener('hashchange', check);
+  window.addEventListener('scroll', onScroll, { passive: true });
   focusElement.addEventListener('focusout', later);
   observer?.observe(document.documentElement);
   observer?.observe(document.body);
-  if (document.readyState === 'complete') later();
-  else window.addEventListener('load', onLoad, { once: true });
+  if (document.readyState === 'complete') {
+    later();
+    stopAt(started + SETTLE_LIMIT_MS);
+  } else {
+    window.addEventListener('load', onLoad, { once: true });
+    stopAt(started + SETTLE_HARD_LIMIT_MS);
+  }
   // Not every environment has the Font Loading API.
   const fonts = (document as { fonts?: FontFaceSet }).fonts;
-  if (fonts) void fonts.ready.then(reapply);
-  timers.push(window.setTimeout(stop, SETTLE_LIMIT_MS));
+  if (fonts)
+    void fonts.ready.then(() => {
+      reapply();
+    });
   return stop;
 }
 
 /**
  * Deep link on load, then settling (see `settleDeepLink`). Returns a cleanup for unmount.
- * Settling only realigns the scroll when the jump code did the scrolling; a position the
- * browser restored is left alone.
+ * Settling realigns the scroll only when the page is at the target's landing after the jump:
+ * the jump code scrolled there, or the page was already there (React StrictMode's second
+ * effect run in development). A position the browser restored elsewhere is left alone, and
+ * so is a target in a sticky or fixed container (its box moves with the scroll, so its
+ * landing can't be measured reliably).
  */
 export function installDeepLink(): () => void {
   const scrolledFirst = window.scrollY !== 0;
@@ -307,7 +474,8 @@ export function installDeepLink(): () => void {
   const element = elementForHash(window.location.hash);
   const target = element ? jumpTargetFor(element) : null;
   if (!focused || !target) return () => undefined;
-  return settleDeepLink(target, focused, !scrolledFirst);
+  const atLanding = !scrolledFirst || Math.abs(window.scrollY - landingScrollY(target)) <= 1;
+  return settleDeepLink(target, focused, atLanding && !insideStickyOrFixed(target));
 }
 
 /**

@@ -14,9 +14,13 @@ import {
   jumpFocusElement,
   jumpTargetFor,
   jumpToHashOnLoad,
+  insideStickyOrFixed,
   landingScrollY,
+  SETTLE_AFTER_LOAD_MS,
+  SETTLE_HARD_LIMIT_MS,
   SETTLE_LIMIT_MS,
   SETTLE_MAX_REALIGNS,
+  SETTLE_SCROLL_QUIET_MS,
   settleDeepLink,
   trackHeaderHeight,
 } from './jump';
@@ -24,6 +28,11 @@ import { useHeaderHeight } from './useJumpNavigation';
 
 /** jsdom has no layout, so scrolling is recorded instead of performed. */
 const scrollIntoView = vi.fn();
+
+/** ResizeObserver entries reporting `height` for the body (what settling observes). */
+function resized(height: number, target: Element = document.body): ResizeObserverEntry[] {
+  return [{ target, contentRect: { height } } as unknown as ResizeObserverEntry];
+}
 
 /** A fake scroll position that window.scrollTo moves and window.scrollY reads. */
 let scrollPosition = 0;
@@ -532,9 +541,9 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
    * A chapter at a controllable layout position, with the URL pointing at it and the page at
    * its landing (as right after the jump).
    */
-  function story(hash = '/#now') {
+  function story(hash = '/#now', headingOffset = 120) {
     mount(`
-      <section id="now" data-chapter="now"><h2 tabindex="-1">Now</h2></section>
+      <section id="now" data-chapter="now"><h2 id="now-title" tabindex="-1">Now</h2></section>
       <button type="button">Elsewhere</button>`);
     window.history.replaceState(null, '', hash);
     const target = document.getElementById('now') as HTMLElement;
@@ -544,6 +553,9 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
     );
     scrollPosition = 1000;
     const heading = screen.getByRole('heading', { name: 'Now' });
+    vi.spyOn(heading, 'getBoundingClientRect').mockImplementation(
+      () => ({ top: top + headingOffset - scrollPosition }) as DOMRect,
+    );
     heading.focus();
     return {
       target,
@@ -624,11 +636,11 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
     expect(realigns()).toHaveLength(1);
   });
 
-  it('realigns when something else moved the page (such as an engine fragment scroll)', () => {
+  it("realigns at load after an engine scrolled to the fragment's own heading", () => {
     override(document, 'readyState', 'loading');
-    const { target, heading } = story();
+    const { target, heading } = story('/#now-title', 340);
     stop = settleDeepLink(target, heading, true);
-    scrollPosition = 1120;
+    scrollPosition = 1340;
     window.dispatchEvent(new Event('load'));
     expect(realigns()).toEqual([[{ top: 1000, behavior: 'instant' }]]);
   });
@@ -668,12 +680,12 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
 
   it('checks after layout changes, at most once per frame, only while aligning', () => {
     const observed: Element[] = [];
-    const callbacks: (() => void)[] = [];
+    const callbacks: ((entries: ResizeObserverEntry[]) => void)[] = [];
     const disconnect = vi.fn();
     vi.stubGlobal(
       'ResizeObserver',
       class {
-        constructor(callback: () => void) {
+        constructor(callback: (entries: ResizeObserverEntry[]) => void) {
           callbacks.push(callback);
         }
         observe(element: Element) {
@@ -692,15 +704,19 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
     const { target, heading, moveTo } = story();
     stop = settleDeepLink(target, heading, true);
     expect(observed).toEqual([document.documentElement, document.body]);
+    // The first notification (sent on observe) and an unchanged height are not layout changes.
+    callbacks[0]?.(resized(5000));
+    callbacks[0]?.(resized(5000));
+    expect(frames).toEqual([]);
     moveTo(1040);
-    callbacks[0]?.();
-    callbacks[0]?.();
+    callbacks[0]?.(resized(5040));
+    callbacks[0]?.(resized(5060));
     expect(frames).toHaveLength(1);
     frames[0]?.(0);
     expect(realigns()).toEqual([[{ top: 1040, behavior: 'instant' }]]);
 
     // A frame still pending when settling stops is cancelled, and the observer disconnected.
-    callbacks[0]?.();
+    callbacks[0]?.(resized(5100));
     stop();
     expect(cancel).toHaveBeenCalledWith(2);
     expect(disconnect).toHaveBeenCalledTimes(1);
@@ -711,18 +727,18 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
   });
 
   it(`gives up realigning after ${String(SETTLE_MAX_REALIGNS)} scrolls`, () => {
-    const { target, heading } = story();
+    const { target, heading } = story('/#now-title', 340);
     stop = settleDeepLink(target, heading, true);
-    // The page refuses to stay put (something keeps moving it back).
+    // The page refuses to stay put (something keeps moving it back to the heading).
     windowScrollTo.mockImplementation(() => undefined);
-    scrollPosition = 0;
+    scrollPosition = 1340;
     for (let i = 0; i < SETTLE_MAX_REALIGNS + 5; i++) {
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     }
     expect(realigns()).toHaveLength(SETTLE_MAX_REALIGNS);
   });
 
-  it(`gives up after ${String(SETTLE_LIMIT_MS)} ms, and the cleanup stops it too`, () => {
+  it(`gives up ${String(SETTLE_LIMIT_MS)} ms after starting on a loaded page, and the cleanup stops it too`, () => {
     vi.useFakeTimers();
     const { target, heading, moveTo } = story();
     stop = settleDeepLink(target, heading, true);
@@ -736,6 +752,387 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
     again();
     window.dispatchEvent(new HashChangeEvent('hashchange'));
     expect(realigns()).toEqual([]);
+  });
+
+  it(`runs until the later of ${String(SETTLE_LIMIT_MS)} ms and ${String(SETTLE_AFTER_LOAD_MS)} ms after load`, () => {
+    vi.useFakeTimers();
+    override(document, 'readyState', 'loading');
+    const { target, heading, moveTo } = story();
+    stop = settleDeepLink(target, heading, true);
+    vi.advanceTimersByTime(9_000);
+    window.dispatchEvent(new Event('load'));
+    vi.advanceTimersByTime(SETTLE_AFTER_LOAD_MS - 100);
+    moveTo(1050);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(realigns()).toEqual([[{ top: 1050, behavior: 'instant' }]]);
+    vi.advanceTimersByTime(200);
+    moveTo(1100);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(realigns()).toHaveLength(1);
+  });
+
+  it('keeps the start limit when load comes early', () => {
+    vi.useFakeTimers();
+    override(document, 'readyState', 'loading');
+    const { target, heading, moveTo } = story();
+    stop = settleDeepLink(target, heading, true);
+    vi.advanceTimersByTime(100);
+    window.dispatchEvent(new Event('load'));
+    vi.advanceTimersByTime(SETTLE_LIMIT_MS - 200);
+    moveTo(1050);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(realigns()).toHaveLength(1);
+    vi.advanceTimersByTime(200);
+    moveTo(1100);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(realigns()).toHaveLength(1);
+  });
+
+  it(`stops after ${String(SETTLE_HARD_LIMIT_MS)} ms on a page that never finishes loading`, () => {
+    vi.useFakeTimers();
+    override(document, 'readyState', 'loading');
+    const { target, heading, moveTo } = story();
+    stop = settleDeepLink(target, heading, true);
+    vi.advanceTimersByTime(SETTLE_HARD_LIMIT_MS - 100);
+    moveTo(1050);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(realigns()).toHaveLength(1);
+    vi.advanceTimersByTime(200);
+    moveTo(1100);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(realigns()).toHaveLength(1);
+  });
+
+  describe('scrolls that are not its own', () => {
+    let frames: FrameRequestCallback[] = [];
+    beforeEach(() => {
+      vi.useFakeTimers();
+      frames = [];
+      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+      vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    });
+    const runFrames = () => {
+      for (const callback of frames.splice(0)) callback(0);
+    };
+    const scrollTo = (y: number) => {
+      scrollPosition = y;
+      window.dispatchEvent(new Event('scroll'));
+    };
+    const quiet = () => {
+      vi.advanceTimersByTime(SETTLE_SCROLL_QUIET_MS);
+    };
+    /** Proves aligning is still on (or off) with a later layout change. */
+    const stillAligning = (moveTo: (value: number) => void, to: number) => {
+      const before = realigns().length;
+      moveTo(to);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      return realigns().length > before;
+    };
+
+    it('ignores its own position', () => {
+      const { target, heading } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(1000.5);
+      quiet();
+      expect(realigns()).toEqual([]);
+    });
+
+    it.each([120, 340])(
+      'realigns an engine fragment scroll to a heading %i px below the chapter top',
+      (offset) => {
+        // The Worlds overview puts a vignette and an eyebrow above the heading (189–341 px).
+        const { target, heading, moveTo } = story('/#now-title', offset);
+        stop = settleDeepLink(target, heading, true);
+        scrollTo(1000 + offset);
+        quiet();
+        expect(realigns()).toEqual([[{ top: 1000, behavior: 'instant' }]]);
+        expect(stillAligning(moveTo, 1050)).toBe(true);
+      },
+    );
+
+    it('realigns at once when a check finds the fragment geometry before the scroll event', () => {
+      const { target, heading } = story('/#now-title', 340);
+      stop = settleDeepLink(target, heading, true);
+      scrollPosition = 1340;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      expect(realigns()).toEqual([[{ top: 1000, behavior: 'instant' }]]);
+    });
+
+    it('judges a smooth fragment scroll where it ends, not on the way', () => {
+      const { target, heading } = story('/#now-title', 340);
+      stop = settleDeepLink(target, heading, true);
+      for (const y of [1010, 1060, 1150, 1260, 1320, 1340]) {
+        scrollTo(y);
+        vi.advanceTimersByTime(16);
+      }
+      expect(realigns()).toEqual([]);
+      quiet();
+      expect(realigns()).toEqual([[{ top: 1000, behavior: 'instant' }]]);
+    });
+
+    it('treats the bottom as the end of a fragment scroll when the clamp explains it', () => {
+      // The page can scroll to 900 at most, so the target (at 1000) stays 100 px below its
+      // margin there, inside the viewport: that's where a fragment scroll to it ends.
+      override(document.documentElement, 'scrollHeight', 900 + window.innerHeight);
+      const { target, heading, moveTo } = story();
+      scrollPosition = 700;
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(900);
+      quiet();
+      expect(stillAligning(moveTo, 800)).toBe(true);
+      expect(realigns()).toEqual([[{ top: 800, behavior: 'instant' }]]);
+    });
+
+    it('does not take a no-input scroll to the bottom for a fragment scroll', () => {
+      // At the bottom with the target 400 px above the viewport: a scrollbar drag or a jump
+      // to the end, not something the hash explains.
+      override(document.documentElement, 'scrollHeight', 1400 + window.innerHeight);
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(1400);
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1050)).toBe(false);
+    });
+
+    /** A ResizeObserver whose callback the test calls (a layout change). */
+    function observeLayout() {
+      const callbacks: ((entries: ResizeObserverEntry[]) => void)[] = [];
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: (entries: ResizeObserverEntry[]) => void) {
+            callbacks.push(callback);
+          }
+          observe() {
+            return undefined;
+          }
+          disconnect() {
+            return undefined;
+          }
+        },
+      );
+      let height = 5000;
+      let first = true;
+      /** Reports a page-height change of `by` px (after the observer's first notification). */
+      return (by = 400) => {
+        for (const callback of callbacks) {
+          if (first) callback(resized(height));
+          height += by;
+          callback(resized(height));
+        }
+        first = false;
+      };
+    }
+
+    it("never takes the observer's first notification for a layout change", () => {
+      const callbacks: ((entries: ResizeObserverEntry[]) => void)[] = [];
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: (entries: ResizeObserverEntry[]) => void) {
+            callbacks.push(callback);
+          }
+          observe() {
+            return undefined;
+          }
+          disconnect() {
+            return undefined;
+          }
+        },
+      );
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      // A no-input scroll, and the first notification in the same frame (seen in WebKit).
+      scrollTo(1080);
+      callbacks[0]?.([...resized(5000), ...resized(4000, document.documentElement)]);
+      runFrames();
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1100)).toBe(false);
+    });
+
+    it.each([
+      ['grows (+40 px, anchoring followed 25)', 1040, 1025],
+      ['shrinks (−24 px, anchoring followed 15)', 976, 985],
+      ['moved the anchored heading more than the chapter (+120, page +180)', 1120, 1180],
+    ])('realigns a whole-page reflow that %s, whatever the geometry', (_name, top, pageY) => {
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      moveTo(top);
+      layoutChanged();
+      // Scroll anchoring's scroll event comes while the layout check is pending.
+      scrollTo(pageY);
+      runFrames();
+      expect(realigns()).toEqual([[{ top, behavior: 'instant' }]]);
+      quiet();
+      expect(stillAligning(moveTo, top + 30)).toBe(true);
+    });
+
+    it('runs a plain check at document.fonts.ready (no layout change assumed)', async () => {
+      // WebKit resolves it after load even when no font changed; a real swap's reflow reaches
+      // the ResizeObserver. So a no-input scroll just before it is still judged as a scroll.
+      let fontsLoaded: () => void = () => undefined;
+      override(document, 'fonts', {
+        ready: new Promise<void>((resolve) => {
+          fontsLoaded = resolve;
+        }),
+      });
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollPosition = 1080;
+      await act(async () => {
+        fontsLoaded();
+        await Promise.resolve();
+      });
+      expect(realigns()).toEqual([]);
+      quiet();
+      expect(stillAligning(moveTo, 1100)).toBe(false);
+    });
+
+    it('judges the same move by geometry when no layout change explains it', () => {
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      moveTo(1040);
+      scrollTo(1025);
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1100)).toBe(false);
+    });
+
+    it('takes a page move larger than the layout change for a scroll', () => {
+      // A visitor's 80 px scroll in the same frame as a 20 px late image (seen in WebKit).
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(1080);
+      moveTo(1020);
+      layoutChanged(20);
+      runFrames();
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1100)).toBe(false);
+    });
+
+    it('accepts the false positive: a reflow right after a no-input scroll realigns', () => {
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(1080);
+      moveTo(1030);
+      layoutChanged();
+      runFrames();
+      expect(realigns()).toEqual([[{ top: 1030, behavior: 'instant' }]]);
+    });
+
+    it.each([
+      ['near (find in page, just below the fold)', 80],
+      ['far (a scrollbar drag, or a late scroll restore)', -1500],
+    ])('leaves any other scroll alone, %s, and keeps the focus', (_name, by) => {
+      const { target, heading, moveTo } = story('/#now-title', 340);
+      const removed = vi.spyOn(window, 'removeEventListener');
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(1000 + by);
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(removed).toHaveBeenCalledWith('scroll', expect.any(Function));
+      expect(stillAligning(moveTo, 1050)).toBe(false);
+      heading.blur();
+      vi.advanceTimersByTime(1);
+      expect(heading).toHaveFocus();
+    });
+
+    it('waits when a check runs before the scroll event, then respects the scroll', () => {
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollPosition = 700;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      expect(realigns()).toEqual([]);
+      quiet();
+      expect(stillAligning(moveTo, 1100)).toBe(false);
+    });
+
+    it('catches up after waiting when the page came back by itself', () => {
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(1080);
+      moveTo(1030);
+      scrollPosition = 1000;
+      quiet();
+      expect(realigns()).toEqual([[{ top: 1030, behavior: 'instant' }]]);
+    });
+
+    it.each([
+      ['more than the target moved (a scroll on top of a reflow)', 1200, 1280],
+      ['against the target', 1200, 950],
+    ])('without a layout check, does not take a page move %s for layout', (_name, top, pageY) => {
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      moveTo(top);
+      scrollTo(pageY);
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, top + 50)).toBe(false);
+    });
+
+    it('ignores scrolls while a layout check is pending (scroll anchoring)', () => {
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      // Content above grew by 400 px and the browser's scroll anchoring followed it.
+      moveTo(1400);
+      layoutChanged();
+      scrollTo(1400);
+      expect(frames).toHaveLength(1);
+      runFrames();
+      quiet();
+      expect(realigns()).toEqual([]);
+      // Still aligning afterwards: the anchored position became the confirmed one.
+      expect(stillAligning(moveTo, 1450)).toBe(true);
+      expect(realigns()).toEqual([[{ top: 1450, behavior: 'instant' }]]);
+    });
+
+    it('still follows a reflow above the target when the page itself did not move', () => {
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      expect(stillAligning(moveTo, 1600)).toBe(true);
+      expect(realigns()).toEqual([[{ top: 1600, behavior: 'instant' }]]);
+    });
+
+    it("ignores scrolls when it isn't aligning", () => {
+      const { target, heading } = story('/#now-title', 340);
+      stop = settleDeepLink(target, heading, false);
+      scrollTo(1340);
+      quiet();
+      expect(realigns()).toEqual([]);
+    });
+
+    it('cancels a pending decision when it stops', () => {
+      const { target, heading } = story('/#now-title', 340);
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(1340);
+      stop();
+      quiet();
+      expect(realigns()).toEqual([]);
+    });
+  });
+});
+
+describe('insideStickyOrFixed', () => {
+  it('finds a sticky or fixed container, and nothing in normal flow', () => {
+    mount(`
+      <div class="stage"><nav id="world-map" data-jump-target><h2>Map</h2></nav></div>
+      <section id="now" data-chapter="now"><h2>Now</h2></section>`);
+    const stage = document.querySelector('.stage') as HTMLElement;
+    stage.style.position = 'sticky';
+    expect(insideStickyOrFixed(document.getElementById('world-map') as HTMLElement)).toBe(true);
+    stage.style.position = 'fixed';
+    expect(insideStickyOrFixed(document.getElementById('world-map') as HTMLElement)).toBe(true);
+    expect(insideStickyOrFixed(document.getElementById('now') as HTMLElement)).toBe(false);
   });
 });
 
@@ -752,6 +1149,57 @@ describe('installDeepLink', () => {
     window.history.replaceState(null, '', '/#main');
     stop = installDeepLink();
     expect(document.getElementById('main')).toHaveFocus();
+  });
+
+  /** A chapter laid out at 1000 px, with the URL pointing at it. */
+  function chapter(
+    html = '<section id="now" data-chapter="now"><h2 tabindex="-1">Now</h2></section>',
+  ) {
+    mount(html);
+    window.history.replaceState(null, '', '/#now');
+    const target = document.getElementById('now') as HTMLElement;
+    let top = 1000;
+    vi.spyOn(target, 'getBoundingClientRect').mockImplementation(
+      () => ({ top: top - scrollPosition }) as DOMRect,
+    );
+    return (value: number) => {
+      top = value;
+    };
+  }
+  const realigned = () =>
+    windowScrollTo.mock.calls.filter(([options]) => typeof options === 'object').slice(1);
+
+  it('on a page that starts scrolled elsewhere, leaves later layout changes alone', () => {
+    const moveTo = chapter();
+    scrollPosition = 500;
+    stop = installDeepLink();
+    expect(screen.getByRole('heading', { name: 'Now' })).toHaveFocus();
+    moveTo(1100);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(windowScrollTo.mock.calls.filter(([options]) => typeof options === 'object')).toEqual(
+      [],
+    );
+  });
+
+  it('keeps aligning when the page is already at the landing (StrictMode second run)', () => {
+    const moveTo = chapter();
+    scrollPosition = 1000;
+    stop = installDeepLink();
+    moveTo(1040);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(windowScrollTo).toHaveBeenCalledWith({ top: 1040, behavior: 'instant' });
+  });
+
+  it('jumps to a target in a sticky container but never realigns it', () => {
+    const moveTo = chapter(
+      '<div class="stage"><section id="now" data-chapter="now"><h2 tabindex="-1">Now</h2></section></div>',
+    );
+    (document.querySelector('.stage') as HTMLElement).style.position = 'sticky';
+    stop = installDeepLink();
+    expect(windowScrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'instant' });
+    moveTo(1100);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(realigned()).toEqual([]);
   });
 
   it('jumps, focuses and keeps the focus while the page settles', async () => {
