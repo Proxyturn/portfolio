@@ -131,7 +131,8 @@ William's request
   - **Worlds:** version 2, the clickable world (section 3), approved by William (2026-11-09).
     The shared jump behavior lands on `main` first, then a spike goes to the critic and to
     William before the full build on `concept/worlds`. Version 3b is kept only as a record.
-    Two new map labels and a confirmation of the PT copy are pending his OK with the spike.
+    Spike reviewed; William's answers (2026-11-10) are at the end of `docs/STORYBOARDS.md`:
+    copy approved, hook first on phones, labels at least about 12 px.
 
 ## Conventions (summary; details in README.md)
 

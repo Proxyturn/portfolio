@@ -672,6 +672,22 @@ The critic approved the build first. Then William decided:
    camera, focus, jump, Lighthouse on mobile) goes through the critic and to William before
    the full build on `concept/worlds`.
 
+## William's answers on the Worlds spike (2026-11-10)
+
+The critic approved the spike summary (round 3). William answered "Yes, recommended" to all
+three questions:
+
+1. **Copy:** the map labels "Between worlds · ATOS" / "Entre mundos · ATOS" and "Computer
+   Science · UniRitter" / "Ciência da Computação · UniRitter" are approved. The Portuguese
+   first options are confirmed: "Seis distritos, um desenvolvedor", "Distrito …" and
+   "Correio". "Six districts, one developer" is a small line above the name; the name
+   stays the page's main heading.
+2. **Phones and short screens (overview layout):** the hook text (name and intro) comes
+   first, then the map. This changes section 3's "overview at the top".
+3. **Labels:** a minimum of about 12 px wherever the whole map is shown (strip and the
+   1024-wide side-by-side layout included), through bigger labels and/or a wider map
+   arrangement; where 12 px still can't be met, the overview map is used instead.
+
 ## Questions for William on Worlds version 2 (2026-11-09, answered above)
 
 W1. **Which Worlds becomes the third concept?**
