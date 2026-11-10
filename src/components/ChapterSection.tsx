@@ -11,8 +11,9 @@ interface Props {
   /** The hook chapter renders its own <h1>; other chapters get an <h2> title. */
   readonly hideTitle?: boolean;
   /**
-   * Optional short label shown before the title (for example a district name). It comes before
-   * the heading in the DOM, so it is read first. Nothing is rendered when it is absent.
+   * Optional short label shown before the title (for example a district name). It comes
+   * before the heading in reading order (it isn't announced when a jump focuses the heading).
+   * Nothing is rendered when it is absent or empty.
    */
   readonly eyebrow?: ReactNode;
 }
@@ -33,7 +34,7 @@ export function ChapterSection({ id, children, className, hideTitle = false, eye
       aria-label={hideTitle && chapter ? t(chapter.navLabel, lang) : undefined}
       className={className}
     >
-      {eyebrow !== undefined && eyebrow !== null && <p className="chapter__eyebrow">{eyebrow}</p>}
+      {eyebrow ? <p className="chapter__eyebrow">{eyebrow}</p> : null}
       {!hideTitle && chapter && (
         <h2 id={titleId} tabIndex={-1}>
           {t(chapter.title, lang)}

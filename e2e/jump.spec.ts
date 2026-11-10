@@ -141,26 +141,38 @@ test('a hash naming a heading inside a chapter lands on the chapter', async ({ p
   await expectLandedOn(page, 'energy');
 });
 
+/**
+ * Reloading a deep link. Usually the jump code lands it again. Sometimes (Chromium, a slow
+ * CPU) the browser applies its own scroll restore before any app code runs; a restored
+ * position wins, so then the page stays where the browser put it, which must still be the
+ * landing within the jump gap (24 px), with the heading below the header and focused.
+ */
 test('reloading a deep link lands on it again', async ({ page }) => {
   await visitDeepLink(page, '#now');
   await expectLandedOn(page, 'now');
+  const before = await page.evaluate(() => window.scrollY);
   await page.reload();
   await expect(page.locator('#now')).toBeAttached();
-  await expectLandedOn(page, 'now');
+  const landing = await settledLanding(page, 'now');
+  const strict = landing.fromMargin >= -REVEAL_RISE && landing.fromMargin <= 2;
+  const detail = `scrollY before reload ${String(before)}, after ${String(landing.scrollY)}, fromMargin ${String(landing.fromMargin)}`;
+  expect(landing.focused, detail).toBe(true);
+  expect(landing.headingTop >= landing.headerBottom, detail).toBe(true);
+  expect(strict || Math.abs(landing.fromMargin) <= 24, detail).toBe(true);
 });
 
 /**
- * Reloading after scrolling away from the hash. Chromium and WebKit try to restore the scroll
- * position before the story has rendered, find the page too short and give up (measured: they
- * end at 0 without the jump code), so the hash wins and the page lands on it. An engine that
- * does restore the position, or has already scrolled to the hash itself (seen in Chromium),
- * leaves scrollY above 0: the jump code then doesn't scroll, but
- * still focuses the hash's heading. Firefox can't run on the development machine, so both
- * outcomes are accepted there.
+ * Reloading after scrolling away from the hash. Whether the browser restores the scroll
+ * position depends on timing, not only on the engine: usually Chromium and WebKit try before
+ * the story has rendered, find the page too short and give up, so the jump code scrolls to the
+ * hash; but when the story commits in the same task as a pending restore (seen in Chromium,
+ * often on a slow CPU), the restored position is applied before any app code runs. The rule in
+ * jump.ts is that a restored position wins (the code then only focuses). So in every engine the
+ * page ends either at the hash's landing or at the restored position, never at the top, and the
+ * hash's heading has focus either way.
  */
 test('reloading after scrolling away: restored position, or the hash, never the top', async ({
   page,
-  browserName,
 }) => {
   await visitDeepLink(page, '#now');
   await expectLandedOn(page, 'now');
@@ -173,12 +185,12 @@ test('reloading after scrolling away: restored position, or the hash, never the 
   await expect(page.locator('#now')).toBeAttached();
   const landing = await settledLanding(page, 'now');
   const restored = Math.abs(landing.scrollY - scrolled) <= 2;
-  if (browserName === 'firefox') {
-    if (!restored) await expectLandedOn(page, 'now');
-    else expect(landing.focused).toBe(true);
+  if (restored) {
+    expect(landing.focused).toBe(true);
   } else {
     await expectLandedOn(page, 'now');
   }
+  expect(landing.scrollY).toBeGreaterThan(0);
 });
 
 test('Back from another page to a deep link lands on it', async ({ page }) => {
@@ -206,7 +218,7 @@ test('the jump offset uses the measured header height', async ({ page }) => {
  * between the jump and `load` at any runner speed, like an engine (Firefox) that handles the
  * fragment again later or a web font that swaps late.
  */
-async function visitDeepLinkWithHeldLoad(page: Page, hash: string) {
+async function visitDeepLinkWithHeldLoad(page: Page, hash: string, focused = '#now h2') {
   let release: () => void = () => undefined;
   const held = new Promise<void>((resolve) => {
     release = resolve;
@@ -225,7 +237,7 @@ async function visitDeepLinkWithHeldLoad(page: Page, hash: string) {
     });
   });
   await page.goto(`/${hash}`, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('#now h2')).toBeFocused();
+  await expect(page.locator(focused)).toBeFocused();
   expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
   return async function finishLoading() {
     release();
@@ -249,18 +261,58 @@ test('a deep link keeps its focus and position while the page finishes loading',
   await expectLandedOn(page, 'now');
 });
 
-test('a deep link moved by page script right after load returns to its landing', async ({
-  page,
-}) => {
+test('a script scroll right after load that is not a fragment scroll wins', async ({ page }) => {
   const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
-  // Like an engine's own load-time fragment scroll, or a scroll scene refreshing at load:
-  // the page moves by 120 px after the jump code's own load check has run.
+  // The page moves by 120 px right after the jump code's own load check, to a place where
+  // neither the hash's element nor the target is at its scroll margin: that's not an engine's
+  // fragment scroll, so (like find in page) it is respected. Late layout changes (a scene
+  // inserting a pin spacer) are still followed; see the "content inserted above" test.
   await page.evaluate(() => {
     window.addEventListener('load', () => {
       window.scrollBy({ top: 120, behavior: 'instant' });
     });
   });
   await finishLoading();
+  await page.waitForTimeout(500);
+  const landing = await settledLanding(page, 'now');
+  expect(landing.fromMargin).toBeCloseTo(-120, -1);
+  expect(landing.focused).toBe(true);
+});
+
+for (const [kind, style] of [
+  ['grows', { letterSpacing: '0.04em', lineHeight: '1.85' }],
+  ['shrinks', { letterSpacing: '-0.02em', lineHeight: '1.35' }],
+] as const) {
+  test(`a deep link stays at its landing when the whole page reflows after load (${kind})`, async ({
+    page,
+  }) => {
+    // Like a web-font swap: every line above the target changes height, partly above the
+    // scroll-anchoring node (compensated by the browser) and partly below it (not).
+    const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
+    await finishLoading();
+    await page.evaluate((values) => {
+      document.body.style.setProperty('letter-spacing', values.letterSpacing);
+      document.body.style.setProperty('line-height', values.lineHeight);
+    }, style);
+    await expectLandedOn(page, 'now');
+  });
+}
+
+test('a deep link stays at its landing when content changes above and below the anchor', async ({
+  page,
+}) => {
+  const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
+  await finishLoading();
+  await page.evaluate(() => {
+    // Far above (compensated by scroll anchoring), right above the target (between an anchor
+    // in the previous chapter and the target), and inside the target above its focused
+    // heading (anchoring on that heading moves the page more than the target moved).
+    document
+      .querySelector<HTMLElement>('[data-chapter="hook"]')
+      ?.style.setProperty('padding-bottom', '120px');
+    document.getElementById('breadth')?.style.setProperty('padding-bottom', '200px');
+    document.getElementById('now')?.style.setProperty('padding-top', '160px');
+  });
   await expectLandedOn(page, 'now');
 });
 
@@ -277,6 +329,60 @@ test('a deep link whose target moves after load (content inserted above) follows
   });
   await expectLandedOn(page, 'now');
 });
+
+for (const [kind, by] of [
+  ['near (find in page, just below the fold)', 80],
+  ['far (a scrollbar drag, or a late scroll restore)', -1500],
+] as const) {
+  test(`a ${kind} scroll without pointer or keys is not pulled back`, async ({ page }) => {
+    const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
+    await page.evaluate((offset) => {
+      window.scrollTo({ top: window.scrollY + offset, behavior: 'instant' });
+    }, by);
+    await finishLoading();
+    // Once settling has judged the scroll (it waits for the page to be still), a later layout
+    // change would have been realigned before; now the visitor's place wins. (A reflow within
+    // that short wait is an accepted false positive, see settleDeepLink.)
+    await page.waitForTimeout(400);
+    await page.evaluate(() => {
+      document
+        .querySelector<HTMLElement>('[data-chapter="hook"]')
+        ?.style.setProperty('padding-bottom', '200px');
+    });
+    await page.waitForTimeout(500);
+    const landing = await settledLanding(page, 'now');
+    expect(Math.abs(landing.fromMargin)).toBeGreaterThan(60);
+    expect(landing.focused).toBe(true);
+  });
+}
+
+/**
+ * What Firefox does at load: it scrolls to the fragment's own element (here the chapter's
+ * heading, `#energy-title`) after the jump, smoothly under `scroll-behavior: smooth`, and
+ * without any input. The chapter must still end at its landing, also when the heading sits far
+ * below the chapter's top (as under the Worlds overview's vignette).
+ */
+for (const [kind, extra] of [
+  ['', 0],
+  [' with the heading far below the chapter top', 400],
+] as const) {
+  test(`an engine's late scroll to the fragment's heading is realigned${kind}`, async ({
+    page,
+  }) => {
+    const finishLoading = await visitDeepLinkWithHeldLoad(page, '#energy-title', '#energy h2');
+    await page.evaluate((padding) => {
+      if (padding) {
+        document.getElementById('energy')?.style.setProperty('padding-top', `${String(padding)}px`);
+      }
+    }, extra);
+    await expectLandedOn(page, 'energy');
+    await page.evaluate(() => {
+      document.getElementById('energy-title')?.scrollIntoView();
+    });
+    await finishLoading();
+    await expectLandedOn(page, 'energy');
+  });
+}
 
 test('once the visitor interacts, settling a deep link stops', async ({ page }) => {
   const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
@@ -295,40 +401,72 @@ test('without a hash the page stays at the top', async ({ page }) => {
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
-test('Back after jumps restores each position, and focus follows the restored hash', async ({
-  page,
-}) => {
-  await visit(page);
-  const start = await page.evaluate(() => {
-    const top = document.getElementById('origins')?.getBoundingClientRect().top ?? 0;
-    window.scrollTo({ top: Math.round(window.scrollY + top), behavior: 'instant' });
-    return window.scrollY;
+/**
+ * Waits until the page has stayed at `y` for several frames and a scroll event has been
+ * processed, so the browser has committed the position to the current history entry.
+ */
+async function expectScrollSettledAt(page: Page, y: number) {
+  await expect
+    .poll(() =>
+      page.evaluate(async (expected) => {
+        const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+        for (let i = 0; i < 5; i++) {
+          await frame();
+          if (Math.abs(window.scrollY - expected) > 1) return false;
+        }
+        return true;
+      }, y),
+    )
+    .toBe(true);
+  await page.waitForTimeout(300);
+}
+
+/**
+ * Instant jumps (reduced motion): with smooth scrolling, Chromium sometimes records the page's
+ * position for the entry being left while the smooth scroll to the next chapter is already
+ * under way (about 1 run in 50 under load), so Back to that entry restored the wrong place.
+ * That is the browser's bookkeeping, not this code; the test is about Back and focus.
+ */
+test.describe('Back after jumps', () => {
+  test.use({ reducedMotion: 'reduce' });
+
+  test('Back after jumps restores each position, and focus follows the restored hash', async ({
+    page,
+  }) => {
+    await visit(page);
+    // Start only once the page has loaded (ScrollTrigger refreshes at load), so nothing but this
+    // test moves the page while the browser records the entry's scroll position.
+    await page.waitForLoadState('load');
+    const start = await page.evaluate(() => {
+      const top = document.getElementById('origins')?.getBoundingClientRect().top ?? 0;
+      window.scrollTo({ top: Math.round(window.scrollY + top), behavior: 'instant' });
+      return window.scrollY;
+    });
+    expect(start).toBeGreaterThan(0);
+    await expectScrollSettledAt(page, start);
+
+    const nav = page.getByRole('navigation', { name: 'Chapters' });
+    await nav.getByRole('link', { name: 'Energy', exact: true }).click();
+    await expect(page).toHaveURL(/#energy$/);
+    await expectLandedOn(page, 'energy');
+    const energyY = await page.evaluate(() => window.scrollY);
+
+    await nav.getByRole('link', { name: 'Contact', exact: true }).click();
+    await expect(page).toHaveURL(/#contact$/);
+    await expectLandedOn(page, 'contact');
+
+    // Back to #energy: the browser restores its position, focus returns to its heading.
+    await page.goBack();
+    await expect(page).toHaveURL(/#energy$/);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(energyY, -1);
+    await expect(page.locator('#energy h2')).toBeFocused();
+
+    // Back to the page without a hash: the position is restored and focus stays where it was.
+    await page.goBack();
+    await expect(page).not.toHaveURL(/#/);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(start, -1);
+    await expect(page.locator('#energy h2')).toBeFocused();
   });
-  expect(start).toBeGreaterThan(0);
-  // Let the scroll position settle so the browser saves it with the history entry.
-  await page.waitForTimeout(200);
-
-  const nav = page.getByRole('navigation', { name: 'Chapters' });
-  await nav.getByRole('link', { name: 'Energy', exact: true }).click();
-  await expect(page).toHaveURL(/#energy$/);
-  await expectLandedOn(page, 'energy');
-  const energyY = await page.evaluate(() => window.scrollY);
-
-  await nav.getByRole('link', { name: 'Contact', exact: true }).click();
-  await expect(page).toHaveURL(/#contact$/);
-  await expectLandedOn(page, 'contact');
-
-  // Back to #energy: the browser restores its position, focus returns to its heading.
-  await page.goBack();
-  await expect(page).toHaveURL(/#energy$/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(energyY, -1);
-  await expect(page.locator('#energy h2')).toBeFocused();
-
-  // Back to the page without a hash: the position is restored and focus stays where it was.
-  await page.goBack();
-  await expect(page).not.toHaveURL(/#/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(start, -1);
-  await expect(page.locator('#energy h2')).toBeFocused();
 });
 
 test.describe('reduced motion', () => {

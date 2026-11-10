@@ -705,6 +705,8 @@ The critic reviewed the full build. William answered "Yes, recommended" to both 
   overview, which uses a wide arrangement from 820 px wide and a portrait one below that.
 - Three map arrangements (square for the split layout, wide, portrait); labels may wrap onto up
   to three lines, and the accessible name stays exactly the label.
+- With the map in story order and the arrival last, the AI frontier observatory is no longer
+  at the very edge of the map (section 3, beat 7); the main session kept story order.
 - The "You are here" pin sits under the SEMANTIX label. On the map, the four "In progress"
   signs are small boards without text; the four topics, each marked "In progress", are in the
   Next chapter.

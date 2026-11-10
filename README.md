@@ -74,7 +74,9 @@ docs/DEPENDENCIES.md   every dependency and why
   hard-code copy.
 - Wrap each beat in `<ChapterSection id="…">`. Navigation, progress and tests rely on its
   `data-chapter` attribute. Its optional `eyebrow` prop renders a short label
-  (`.chapter__eyebrow`) before the chapter heading, so it is read first; style it in the concept.
+  (`.chapter__eyebrow`) that comes before the heading in reading order (it isn't announced
+  when a jump focuses the heading); nothing is rendered when it is empty. Style it in the
+  concept.
 - Jumps (chapter nav, skills results, deep links, Back/forward) share one behavior from
   `src/components/jump.ts`: native hash navigation, then focus on the target's heading. A
   concept's own cards keep the jump contract: an `id` (`job-<id>` / `edu-<id>`) plus
@@ -85,6 +87,9 @@ docs/DEPENDENCIES.md   every dependency and why
   `--site-header-height` + `--jump-gap`. The header height is measured at runtime, so don't
   hard-code it. A concept with taller sticky chrome (such as a map strip) adds its height to
   `--jump-offset`.
+- Don't put a structural `translateY` (one that is part of the resting layout) on ancestors of
+  jump targets: deep links ignore vertical translations when they measure a landing, so reveal
+  tweens don't shift it, and a resting one would make the target land off its margin.
 - Animate through `useScrollScene()`. It skips setup under `prefers-reduced-motion` and
   reverts every tween and ScrollTrigger on unmount. Animate only `transform` and `opacity`, and
   leave the resting markup fully visible.
