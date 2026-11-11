@@ -91,7 +91,9 @@ export function JourneyStory() {
         <ChapterSection id="hook" hideTitle className="journey-chapter journey-hook">
           <div className="journey-cover">
             {/* <Avatar /> */}
-            <h1 className="journey-cover__title">{cv.identity.name}</h1>
+            <h1 className="journey-cover__title" tabIndex={-1}>
+              {cv.identity.name}
+            </h1>
             <p className="journey-cover__legend">
               {t(cv.role, lang)} · {t(cv.identity.location, lang)}
             </p>

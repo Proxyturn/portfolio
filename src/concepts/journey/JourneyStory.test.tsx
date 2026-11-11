@@ -51,6 +51,30 @@ describe('JourneyStory', () => {
     expect(degree?.querySelector('.journey-flag')).not.toBeNull();
   });
 
+  it('keeps the shared jump contract on every card it renders', () => {
+    const { container } = renderWithLang(<JourneyStory />);
+    const targets = [
+      ...cv.jobs.map((job) => ({ id: `job-${job.id}`, attr: 'data-job', value: job.id })),
+      ...cv.education.map((entry) => ({
+        id: `edu-${entry.id}`,
+        attr: 'data-education',
+        value: entry.id,
+      })),
+    ];
+    for (const { id, attr, value } of targets) {
+      const target = container.querySelector<HTMLElement>(`#${id}`);
+      expect(target, id).not.toBeNull();
+      expect(target?.getAttribute(attr), id).toBe(value);
+      // The first heading is the one a jump focuses: present and focusable by script only.
+      const heading = target?.querySelector('h1, h2, h3, h4, h5, h6');
+      expect(heading?.getAttribute('tabindex'), id).toBe('-1');
+    }
+    // The hook renders its own h1 (ChapterSection's hideTitle), which a jump to #hook focuses.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveAttribute('tabindex', '-1');
+    // No other element claims to be a job or education entry.
+    expect(container.querySelectorAll('[data-job], [data-education]')).toHaveLength(targets.length);
+  });
+
   it('renders the road SVG with a path through the stops', () => {
     stubLayout();
     const { container } = renderWithLang(<JourneyStory />);

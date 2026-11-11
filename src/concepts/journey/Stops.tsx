@@ -80,7 +80,7 @@ export function JobStop({ job, side, fork, here = false }: JobStopProps) {
       <div className="journey-card reveal">
         <header className="journey-signpost">
           {here && <p className="journey-here">{dict.journey.youAreHere}</p>}
-          <h3>{jobTitle(job, lang)}</h3>
+          <h3 tabIndex={-1}>{jobTitle(job, lang)}</h3>
           <p className="journey-signpost__meta">{formatPeriod(job, lang)}</p>
           {job.role && (
             <p className="journey-signpost__meta">
@@ -123,6 +123,7 @@ export function Landmark({ entry, side }: { readonly entry: Education; readonly 
   return (
     <article
       className="journey-stop journey-landmark"
+      id={`edu-${entry.id}`}
       data-education={entry.id}
       data-stop=""
       data-side={side}
@@ -137,7 +138,7 @@ export function Landmark({ entry, side }: { readonly entry: Education; readonly 
       </span>
       <div className="journey-card reveal">
         <p className="journey-kicker">{dict.story.education}</p>
-        <h3>{t(entry.title, lang)}</h3>
+        <h3 tabIndex={-1}>{t(entry.title, lang)}</h3>
         <p className="journey-signpost__meta">
           {entry.institution} · {status}
         </p>
@@ -174,6 +175,7 @@ export function Destination({ entry }: { readonly entry: Education }) {
   return (
     <article
       className="journey-stop journey-destination"
+      id={`edu-${entry.id}`}
       data-education={entry.id}
       data-stop=""
       data-side="center"
@@ -182,7 +184,7 @@ export function Destination({ entry }: { readonly entry: Education }) {
       <RoadAnchor id={entry.id} chapter="next" variant="destination" />
       <div className="journey-card journey-card--destination reveal">
         <p className="journey-kicker">{dict.journey.destination}</p>
-        <h3>{t(entry.title, lang)}</h3>
+        <h3 tabIndex={-1}>{t(entry.title, lang)}</h3>
         <p className="journey-signpost__meta">
           {entry.institution} · <span className="journey-progress">{dict.story.inProgress}</span>
         </p>

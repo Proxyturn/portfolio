@@ -188,6 +188,59 @@ test('scrolling ahead of a slow scene download never leaves stops hidden', async
   await expect(page.locator('.journey-card').first()).toHaveCSS('opacity', '1');
 });
 
+/**
+ * Deep links to Journey's own cards (the shared jump.spec covers chapters, a job and the
+ * degree). The landing must survive the lazy scroll scene: its reveals, the road rebuild and
+ * its ScrollTrigger.refresh() all run after the jump code has scrolled.
+ */
+for (const id of ['job-semantix', 'job-atos-alphaville', 'edu-ai-engineering']) {
+  test(`deep link /#${id} keeps its landing and focus after the scroll scene runs`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('portfolio.lang', 'en');
+    });
+    await page.goto(`/#${id}`);
+    // The scene has run once it drives the road mask; give it time to refresh and reveal.
+    await expect(page.locator('.journey-road__reveal')).toHaveAttribute('transform', /matrix/);
+    const landing = () =>
+      page.evaluate((targetId) => {
+        const target = document.getElementById(targetId);
+        const heading = target?.querySelector('h3[tabindex="-1"]');
+        if (!target || !heading) return null;
+        const margin = parseFloat(getComputedStyle(target).scrollMarginTop);
+        const header = document.querySelector('.site-header')?.getBoundingClientRect().bottom ?? 0;
+        const root = document.documentElement;
+        return {
+          focused: document.activeElement === heading,
+          belowHeader: heading.getBoundingClientRect().top >= header,
+          atMargin:
+            Math.abs(target.getBoundingClientRect().top - margin) <= 2 ||
+            window.scrollY + window.innerHeight >= root.scrollHeight - 2,
+        };
+      }, id);
+    const expected = { focused: true, belowHeader: true, atMargin: true };
+    await expect.poll(landing).toEqual(expected);
+    // Still there once the reveals and the scrubbed road have had time to run.
+    await page.waitForTimeout(1500);
+    expect(await landing()).toEqual(expected);
+    // The late scene left nothing hidden at or above its reveal line (85% down the viewport).
+    // A stop that only peeks in below that line waits for its scroll trigger, as at any
+    // scroll position.
+    const hiddenAboveLine = await page.evaluate(
+      () =>
+        [...document.querySelectorAll<HTMLElement>('[data-stop]')]
+          .filter((stop) => {
+            const r = stop.getBoundingClientRect();
+            return r.bottom > 0 && r.top < window.innerHeight * 0.85;
+          })
+          .flatMap((stop) => [...stop.querySelectorAll<HTMLElement>('.reveal')])
+          .filter((el) => getComputedStyle(el).opacity !== '1').length,
+    );
+    expect(hiddenAboveLine).toBe(0);
+  });
+}
+
 test('choosing a luggage tag highlights its stops and writes the result as text', async ({
   page,
 }) => {

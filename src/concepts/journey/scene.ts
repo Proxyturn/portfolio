@@ -138,6 +138,10 @@ export function driveRoad(root: HTMLElement, geometry: RoadGeometry): void {
       .fromTo(horizon, { opacity: 0 }, { opacity: 1, ease: 'none' }, 0);
   }
 
-  // The road was rebuilt because the layout changed: re-measure every trigger on the page.
-  ScrollTrigger.refresh();
+  // The road was rebuilt because the layout changed: re-measure every trigger on the page,
+  // one by one. Not the global ScrollTrigger.refresh(): that one scrolls the page to the top
+  // and back (and, right after a scroll, is deferred to a later "scrollEnd"), which would
+  // fight the shared deep-link settling (src/components/jump.ts). Journey pins nothing, so
+  // per-trigger measuring is all it needs.
+  for (const trigger of ScrollTrigger.getAll()) trigger.refresh();
 }
