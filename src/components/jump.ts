@@ -257,17 +257,17 @@ export function scrollToLanding(target: HTMLElement): void {
  *   nothing else has focus;
  * - position, only with `align`: at those same moments and on layout changes (a
  *   ResizeObserver on the root and body when one of their heights changes, at most one check
- *   per frame), if the target is more
- *   than 1 px away from its landing, the page scrolls there instantly. Scrolling doesn't
- *   resize anything, so it can't retrigger itself, and it gives up after `SETTLE_MAX_REALIGNS`
- *   scrolls.
+ *   per frame), if the target is more than 1 px away from its landing, the page scrolls there
+ *   instantly. Scrolling doesn't resize anything, so it can't retrigger itself, and it gives
+ *   up after `SETTLE_MAX_REALIGNS` scrolls.
  * - when the page is no longer where this code last put or confirmed it:
  *   - in a check that a layout change triggered (the ResizeObserver saw the root's or the
- *     body's height change), a move no larger than that change is that reflow's scroll
- *     anchoring (a web-font swap, a pin spacer): anchoring
- *     compensates for what changed above its anchor node but not for what changed between
- *     the anchor and the target, so the page moves while the target ends off its margin. It
- *     is realigned whatever the geometry, like a reflow without anchoring.
+ *     body's height change), a move that no earlier check had seen, no larger than that
+ *     change, and in the direction the target or its heading moved, is that reflow's scroll
+ *     anchoring (a web-font swap, a pin spacer). Anchoring compensates for what changed above
+ *     its anchor node but not for what changed between the anchor and the target, so the
+ *     page moves while the target ends off its margin. It is realigned whatever the
+ *     geometry, like a reflow without anchoring.
  *   - otherwise it is a scroll, classified by geometry. It is an engine's fragment scroll
  *     when the element the hash names, or the target, sits at its own scroll margin, or the
  *     page is at its bottom with one of them visible at or below its margin (the clamp
@@ -276,14 +276,25 @@ export function scrollToLanding(target: HTMLElement): void {
  *     Anything else (find in page, browse mode, a scrollbar drag, a late scroll restore)
  *     ends aligning for good, near or far, while focus keeps being re-applied. Scroll events
  *     while a layout check is pending are left to that check.
- *   Scrolls are judged once the page has been still for `SETTLE_SCROLL_QUIET_MS`, so a smooth
- *   fragment scroll (`scroll-behavior: smooth`) is judged where it ends, and a check that runs
- *   before a scroll's `scroll` event waits for it the same way. (A smooth fragment scroll is
- *   therefore allowed to finish and then corrected in one instant step, rather than cancelled
- *   at its first step: a first step can't be told apart from a short find-in-page jump.)
+ *   Scrolls are judged once the page has been still for `SETTLE_SCROLL_QUIET_MS` and two
+ *   more animation frames, and never while a layout check is pending (on slow frames a
+ *   reflow's scroll event, its ResizeObserver report and its check can be hundreds of ms
+ *   apart). So a smooth fragment scroll (`scroll-behavior: smooth`) is judged where it ends,
+ *   and a check that runs before a scroll's `scroll` event waits for it the same way. (A
+ *   smooth fragment scroll is therefore allowed to finish and then corrected in one instant
+ *   step, rather than cancelled at its first step: a first step can't be told apart from a
+ *   short find-in-page jump.) A move a plain check (load, a hashchange) saw counts as seen,
+ *   and so as a scroll rather than a later reflow's anchoring, only once two frames have
+ *   passed without the observer reporting a reflow.
+ *   Decisions and layout checks run in animation frames, so in a hidden tab they wait until
+ *   the tab is shown, or until the stop timer below ends settling.
  *   Accepted false positives, each costing a small correction: a no-input scroll that happens
  *   to leave the hash's element or the target within 2 px of its margin is realigned, and so
- *   is one followed within `SETTLE_SCROLL_QUIET_MS` by a reflow at least as tall as the scroll.
+ *   is one followed within that wait by a reflow at least as tall as the scroll that moves
+ *   the content the same way.
+ *   Accepted false negative: a reflow whose anchoring moves the page against the net move of
+ *   both the target and its heading is judged a scroll, so aligning can end with the target
+ *   off its landing.
  * It stops at the first pointerdown, keydown, wheel or touchstart, when the hash no longer
  * names `target`, at the later of `SETTLE_LIMIT_MS` after it starts and `SETTLE_AFTER_LOAD_MS`
  * after `load` (`SETTLE_HARD_LIMIT_MS` at most), or when the returned cleanup runs.
@@ -297,8 +308,17 @@ export function settleDeepLink(
   const started = Date.now();
   let aligning = align;
   let expectedY = window.scrollY;
+  /** The page position, and where the target and its heading were, at the last check. */
+  let lastY = expectedY;
+  let lastTops = [documentTop(target), documentTop(focusElement)];
+  /** Frames before a move seen by a plain check counts as seen (cancelled on stop). */
+  let sightingFrame = 0;
   let frame = 0;
   let quiet = 0;
+  /** Animation frames requested on the way to a quiet decision (cancelled on stop). */
+  let decisionFrame = 0;
+  /** A quiet decision came due while a layout check was pending: take it after that check. */
+  let decideAfterLayout = false;
   let realigns = 0;
   let done = false;
 
@@ -311,6 +331,12 @@ export function settleDeepLink(
       window.scrollTo({ top: landing, behavior: 'instant' });
     }
     expectedY = window.scrollY;
+    // Confirmed: it is also what the next check compares with (a decision realigns outside
+    // reapply), and any sighting still waiting for its frames is out of date.
+    lastY = expectedY;
+    lastTops = [documentTop(target), documentTop(focusElement)];
+    if (sightingFrame) window.cancelAnimationFrame(sightingFrame);
+    sightingFrame = 0;
   };
   const movedByOthers = () => Math.abs(window.scrollY - expectedY) > 1;
   /** Where an engine's own fragment scroll (or scroll anchoring) leaves the page. */
@@ -324,24 +350,49 @@ export function settleDeepLink(
         ((named !== null && clampedAtBottom(named)) || clampedAtBottom(target)))
     );
   };
-  /** Runs once the page has been still after a scroll that isn't ours. */
+  /**
+   * Runs once the page has been still after a scroll that isn't ours. Never while a layout
+   * check is pending: the scroll may be that reflow's scroll anchoring, which only the check
+   * can tell (on slow frames the quiet timer can come due before the check's frame runs), so
+   * the decision then waits for the check and is taken right after it.
+   */
   const decide = () => {
-    quiet = 0;
+    decisionFrame = 0;
     if (done || !aligning) return;
+    if (frame) {
+      decideAfterLayout = true;
+      return;
+    }
+    quiet = 0;
     // Back where it was: catch up on any layout change skipped while waiting.
     if (!movedByOthers() || fragmentGeometry()) realign();
     else stopAligning();
   };
+  /**
+   * After `SETTLE_SCROLL_QUIET_MS` without a scroll, wait two more animation frames before
+   * deciding: a reflow's ResizeObserver report can come in the frame after its scroll event,
+   * and the layout check it schedules runs in the frame after that.
+   */
+  const afterTwoFrames = () => {
+    decisionFrame = window.requestAnimationFrame(() => {
+      decisionFrame = window.requestAnimationFrame(decide);
+    });
+  };
   const waitUntilQuiet = () => {
     if (quiet) window.clearTimeout(quiet);
-    quiet = window.setTimeout(decide, SETTLE_SCROLL_QUIET_MS);
+    if (decisionFrame) window.cancelAnimationFrame(decisionFrame);
+    decisionFrame = 0;
+    decideAfterLayout = false;
+    quiet = window.setTimeout(afterTwoFrames, SETTLE_SCROLL_QUIET_MS);
   };
 
   /**
    * One check. `layoutChange` is how much the page's height changed when the ResizeObserver
-   * triggered it, and 0 otherwise. A page move no larger than that change is its scroll
-   * anchoring, not a scroll, and the target is realigned whatever the geometry; a larger one
-   * can't come from it (a visitor's scroll around the same moment) and is judged as a scroll.
+   * triggered it, and 0 otherwise. A page move no larger than that change, that no earlier
+   * check had seen, and in the direction the target or its heading moved since the last
+   * check, is its scroll anchoring, not a scroll, and the target is realigned whatever the
+   * geometry; any other move can't come from it (a visitor's scroll around the same moment)
+   * and is judged as a scroll.
    * `document.fonts.ready` runs a plain check: it resolves even when no font changed (WebKit,
    * after load), and a swap's reflow reaches the ResizeObserver anyway.
    */
@@ -355,14 +406,49 @@ export function settleDeepLink(
     const active = document.activeElement;
     if (!active || active === document.body) focusElement.focus({ preventScroll: true });
     if (!aligning) return;
+    const tops = [documentTop(target), documentTop(focusElement)];
     const moved = Math.abs(window.scrollY - expectedY);
-    const byLayout = layoutChange > 0 && moved <= layoutChange + 1;
+    // Only a move that came with this layout change can be its scroll anchoring: one an
+    // earlier check already saw was there before it (a visitor's scroll, judged as such). And
+    // anchoring moves the page the way the content around the target moved (the target or its
+    // heading, whichever it anchored nearest to), never against it.
+    const seenBefore = Math.abs(lastY - expectedY) > 1;
+    const recent = window.scrollY - lastY;
+    const sameWay = () =>
+      tops.some((top, i) => Math.sign(top - (lastTops[i] ?? top)) === Math.sign(recent));
+    const byLayout =
+      layoutChange > 0 && !seenBefore && moved <= layoutChange + 1 && (moved <= 1 || sameWay());
+    if (sightingFrame) window.cancelAnimationFrame(sightingFrame);
+    sightingFrame = 0;
+    let unexplained = false;
     if (moved > 1 && !byLayout) {
       // Someone else moved the page (its scroll event may not even have fired yet).
       if (fragmentGeometry()) realign();
-      else waitUntilQuiet();
+      else {
+        unexplained = true;
+        waitUntilQuiet();
+      }
     } else if (!quiet || byLayout) {
       realign();
+    }
+    const y = window.scrollY;
+    const seenTops = [documentTop(target), documentTop(focusElement)];
+    if (unexplained && layoutChange === 0) {
+      // A plain check can run between a reflow's scroll anchoring and the observer's report
+      // of that reflow (WebKit reports it a frame later). Count the move as seen only once two
+      // frames have passed without such a report.
+      sightingFrame = window.requestAnimationFrame(() => {
+        sightingFrame = window.requestAnimationFrame(() => {
+          sightingFrame = 0;
+          // A layout check due in this frame decides instead (and records the position).
+          if (frame) return;
+          lastY = y;
+          lastTops = seenTops;
+        });
+      });
+    } else {
+      lastY = y;
+      lastTops = seenTops;
     }
   };
   const check = () => {
@@ -381,19 +467,29 @@ export function settleDeepLink(
         const changed = layoutChange;
         layoutChange = 0;
         reapply(changed);
+        if (decideAfterLayout) {
+          decideAfterLayout = false;
+          decide();
+        }
       });
     }
   };
   /**
-   * Last seen heights of the root and body. A layout check runs only when one of them
-   * changed: the observer's first notification (sent for every observed element) only
-   * records them, so it is never taken for a layout change.
+   * Last seen heights (border box) of the root and body, measured when settling starts, so a
+   * reflow between the start and the observer's first notification (sent for every observed
+   * element, some frames later) is still seen as a change. A layout check runs only when one
+   * of them changed; the first notification is otherwise just a confirmation.
    */
   const heights = new Map<Element, number>();
+  for (const element of [document.documentElement, document.body]) {
+    const height = element.getBoundingClientRect().height;
+    // No layout (a test DOM): leave the baseline to the first notification.
+    if (height > 0) heights.set(element, height);
+  }
   const onResize = (entries: readonly ResizeObserverEntry[]) => {
     let change = 0;
     for (const entry of entries) {
-      const height = entry.contentRect.height;
+      const height = entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height;
       const previous = heights.get(entry.target);
       heights.set(entry.target, height);
       if (previous !== undefined) change = Math.max(change, Math.abs(height - previous));
@@ -411,7 +507,12 @@ export function settleDeepLink(
     observer?.disconnect();
     window.removeEventListener('scroll', onScroll);
     if (quiet) window.clearTimeout(quiet);
+    if (decisionFrame) window.cancelAnimationFrame(decisionFrame);
+    if (sightingFrame) window.cancelAnimationFrame(sightingFrame);
+    sightingFrame = 0;
     quiet = 0;
+    decisionFrame = 0;
+    decideAfterLayout = false;
   };
   const stopAt = (time: number) => {
     timers.push(window.setTimeout(stop, Math.max(0, time - Date.now())));
@@ -432,6 +533,8 @@ export function settleDeepLink(
     focusElement.removeEventListener('focusout', later);
     observer?.disconnect();
     if (frame) window.cancelAnimationFrame(frame);
+    if (decisionFrame) window.cancelAnimationFrame(decisionFrame);
+    if (sightingFrame) window.cancelAnimationFrame(sightingFrame);
     if (quiet) window.clearTimeout(quiet);
     for (const timer of timers) window.clearTimeout(timer);
   };
