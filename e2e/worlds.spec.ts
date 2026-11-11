@@ -592,6 +592,47 @@ test.describe('jumps', () => {
       });
     }
   }
+
+  /**
+   * Overview layouts (no sticky stage): each chapter opens with its vignette and eyebrow, so
+   * its heading sits well below the chapter's top. A hash naming the heading itself
+   * (`#energy-title`) still lands the chapter at its margin, with focus on the heading.
+   */
+  for (const [label, size] of [
+    ['portrait overview 390 × 844', { width: 390, height: 844 }],
+    ['wide overview 844 × 390', { width: 844, height: 390 }],
+  ] as const) {
+    for (const [hash, target] of [
+      ['energy-title', 'energy'],
+      ['next-title', 'next'],
+      ['now', 'now'],
+      ['job-atos-frontend', 'job-atos-frontend'],
+      ['edu-computer-science', 'edu-computer-science'],
+    ] as const) {
+      test(`deep link /#${hash} lands on #${target} below the header (${label})`, async ({
+        page,
+      }, testInfo) => {
+        test.skip(
+          isMobile(testInfo.project.name) && size.width !== 390,
+          'The mobile project covers the portrait size.',
+        );
+        await page.setViewportSize(size);
+        await page.addInitScript(() => {
+          window.localStorage.setItem('portfolio.lang', 'en');
+        });
+        await page.goto(`/#${hash}`);
+        await expect(page.locator(`#${target}`)).toBeAttached();
+        expect(
+          await page.evaluate(() =>
+            getComputedStyle(document.querySelector('.worlds__stage') as Element).getPropertyValue(
+              'position',
+            ),
+          ),
+        ).toBe('static');
+        await expectLanded(page, target);
+      });
+    }
+  }
 });
 
 test.describe('reduced motion', () => {
