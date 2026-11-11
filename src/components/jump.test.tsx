@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { App } from '../App';
 import { cv } from '../content/cv';
 import { renderWithLang } from '../test/render';
@@ -31,7 +31,13 @@ const scrollIntoView = vi.fn();
 
 /** ResizeObserver entries reporting `height` for the body (what settling observes). */
 function resized(height: number, target: Element = document.body): ResizeObserverEntry[] {
-  return [{ target, contentRect: { height } } as unknown as ResizeObserverEntry];
+  return [
+    {
+      target,
+      borderBoxSize: [{ blockSize: height }],
+      contentRect: { height },
+    } as unknown as ResizeObserverEntry,
+  ];
 }
 
 /** A fake scroll position that window.scrollTo moves and window.scrollY reads. */
@@ -805,6 +811,7 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
 
   describe('scrolls that are not its own', () => {
     let frames: FrameRequestCallback[] = [];
+    let cancelFrame: MockInstance<(handle: number) => void> | undefined;
     beforeEach(() => {
       vi.useFakeTimers();
       frames = [];
@@ -812,7 +819,7 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
         frames.push(callback);
         return frames.length;
       });
-      vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+      cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
     });
     const runFrames = () => {
       for (const callback of frames.splice(0)) callback(0);
@@ -821,8 +828,11 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       scrollPosition = y;
       window.dispatchEvent(new Event('scroll'));
     };
+    /** The quiet time, then the two animation frames a decision waits for. */
     const quiet = () => {
       vi.advanceTimersByTime(SETTLE_SCROLL_QUIET_MS);
+      runFrames();
+      runFrames();
     };
     /** Proves aligning is still on (or off) with a later layout change. */
     const stillAligning = (moveTo: (value: number) => void, to: number) => {
@@ -1004,6 +1014,35 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       expect(stillAligning(moveTo, 1100)).toBe(false);
     });
 
+    it("sees a reflow that happened before the observer's first notification", () => {
+      // Seen on Journey: a 246 px reflow between the start and the first notification moved
+      // the target 90 px; with the first notification as the baseline it went unnoticed.
+      const callbacks: ((entries: ResizeObserverEntry[]) => void)[] = [];
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: (entries: ResizeObserverEntry[]) => void) {
+            callbacks.push(callback);
+          }
+          observe() {
+            return undefined;
+          }
+          disconnect() {
+            return undefined;
+          }
+        },
+      );
+      vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue({
+        height: 5000,
+      } as DOMRect);
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      moveTo(910);
+      callbacks[0]?.(resized(4754));
+      runFrames();
+      expect(realigns()).toEqual([[{ top: 910, behavior: 'instant' }]]);
+    });
+
     it('takes a page move larger than the layout change for a scroll', () => {
       // A visitor's 80 px scroll in the same frame as a 20 px late image (seen in WebKit).
       const layoutChanged = observeLayout();
@@ -1013,6 +1052,103 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       moveTo(1020);
       layoutChanged(20);
       runFrames();
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1100)).toBe(false);
+    });
+
+    it('does not take a visitor scroll for anchoring when a reflow then moves the content the other way', () => {
+      // Seen on Journey at load: the visitor scrolls 80 px down, then a 246 px layout change
+      // moves the target 141 px up. Anchoring never moves the page against the content.
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollTo(1080);
+      moveTo(859);
+      layoutChanged(246);
+      runFrames();
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 900)).toBe(false);
+    });
+
+    it("does not take a visitor scroll an earlier check saw for a later reflow's anchoring", () => {
+      // Seen on Journey: a check sees the visitor's 80 px scroll; two layout changes later the
+      // content has moved back the same way (net +11 px), but the page didn't move with it.
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      scrollPosition = 1080;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      // Two frames later the sighting stands.
+      runFrames();
+      runFrames();
+      moveTo(1011);
+      layoutChanged(152);
+      runFrames();
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1100)).toBe(false);
+    });
+
+    it('lets the observer report a reflow a frame after a plain check saw its anchoring (WebKit)', () => {
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      vi.advanceTimersByTime(1);
+      moveTo(1040);
+      scrollPosition = 1025;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      expect(realigns()).toEqual([]);
+      runFrames();
+      layoutChanged(40);
+      runFrames();
+      expect(realigns()).toEqual([[{ top: 1040, behavior: 'instant' }]]);
+      quiet();
+      expect(stillAligning(moveTo, 1080)).toBe(true);
+    });
+
+    it("after a decision realigns, a reflow's anchoring is still taken for layout", () => {
+      // A plain check sights a smooth fragment scroll part-way (1200); it ends at the heading
+      // (1340) and the decision realigns to 1000. A +40 px reflow then anchors the page 25 px:
+      // that must be compared with the realigned position, not with the old sighting.
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story('/#now-title', 340);
+      stop = settleDeepLink(target, heading, true);
+      vi.advanceTimersByTime(1);
+      scrollPosition = 1200;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      runFrames();
+      runFrames();
+      scrollTo(1340);
+      quiet();
+      expect(realigns()).toEqual([[{ top: 1000, behavior: 'instant' }]]);
+      moveTo(1040);
+      layoutChanged(40);
+      scrollTo(1025);
+      runFrames();
+      expect(realigns()).toEqual([
+        [{ top: 1000, behavior: 'instant' }],
+        [{ top: 1040, behavior: 'instant' }],
+      ]);
+      quiet();
+      expect(stillAligning(moveTo, 1080)).toBe(true);
+    });
+
+    it('does not take a move a check already saw for a reflow that left the content in place', () => {
+      // The visitor scrolls to 1080 and a check sees it; two frames later a 152 px layout
+      // change elsewhere leaves the target and its heading where they were.
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      vi.advanceTimersByTime(1);
+      scrollPosition = 1080;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      runFrames();
+      runFrames();
+      layoutChanged(152);
+      runFrames();
+      expect(realigns()).toEqual([]);
       quiet();
       expect(realigns()).toEqual([]);
       expect(stillAligning(moveTo, 1100)).toBe(false);
@@ -1118,6 +1254,70 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       stop();
       quiet();
       expect(realigns()).toEqual([]);
+    });
+
+    it('cancels a decision waiting for its frames when it stops', () => {
+      const { target, heading } = story('/#now-title', 340);
+      stop = settleDeepLink(target, heading, true);
+      // Let the start-up check run first, so only the scroll's own decision is left.
+      vi.advanceTimersByTime(1);
+      scrollTo(1340);
+      vi.advanceTimersByTime(SETTLE_SCROLL_QUIET_MS);
+      expect(frames).toHaveLength(1);
+      stop();
+      expect(cancelFrame).toHaveBeenCalledWith(1);
+      runFrames();
+      runFrames();
+      expect(realigns()).toEqual([]);
+    });
+
+    it('decides only after the frames that let a reflow report itself', () => {
+      const { target, heading } = story('/#now-title', 340);
+      stop = settleDeepLink(target, heading, true);
+      // Let the start-up check run first, so only the scroll's own decision is left.
+      vi.advanceTimersByTime(1);
+      scrollTo(1340);
+      vi.advanceTimersByTime(SETTLE_SCROLL_QUIET_MS);
+      expect(realigns()).toEqual([]);
+      runFrames();
+      expect(realigns()).toEqual([]);
+      runFrames();
+      expect(realigns()).toEqual([[{ top: 1000, behavior: 'instant' }]]);
+    });
+
+    it('on slow frames, waits for a pending layout check before deciding (the Journey race)', () => {
+      // A reflow: its scroll anchoring moves the page a little (scroll event first), the quiet
+      // time passes during long frames, and only then does the observer report the height
+      // change and schedule its check.
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      // Let the start-up check run first.
+      vi.advanceTimersByTime(1);
+      moveTo(1440);
+      scrollTo(1004);
+      vi.advanceTimersByTime(SETTLE_SCROLL_QUIET_MS);
+      runFrames();
+      layoutChanged(443);
+      // The decision's frame and the layout check's frame are due together; the decision
+      // comes first and must wait for the check.
+      runFrames();
+      expect(realigns()).toEqual([[{ top: 1440, behavior: 'instant' }]]);
+      expect(stillAligning(moveTo, 1480)).toBe(true);
+    });
+
+    it('on slow frames, still respects a visitor scroll once the layout check has run', () => {
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      moveTo(1010);
+      scrollTo(1300);
+      vi.advanceTimersByTime(SETTLE_SCROLL_QUIET_MS);
+      runFrames();
+      layoutChanged(10);
+      runFrames();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1100)).toBe(false);
     });
   });
 });
