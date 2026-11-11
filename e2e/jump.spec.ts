@@ -66,18 +66,24 @@ async function settledLanding(page: Page, id: string): Promise<Landing> {
 }
 
 async function expectLandedOn(page: Page, id: string) {
+  // Each measurement waits for 10 stable frames; on a heavy concept in a software-rendered
+  // browser frames can take 300–500 ms, so allow several measurements.
   await expect
-    .poll(async () => {
-      const landing = await settledLanding(page, id);
-      return {
-        focused: landing.focused,
-        belowHeader: landing.headingTop >= landing.headerBottom,
-        // Lands at its scroll margin, unless the page can't scroll that far. A card the
-        // browser scrolled to while its reveal animation (y: 24px) was still pending then
-        // rises by up to that much; the heading must still be below the header.
-        atTop: (landing.fromMargin >= -REVEAL_RISE && landing.fromMargin <= 2) || landing.atBottom,
-      };
-    })
+    .poll(
+      async () => {
+        const landing = await settledLanding(page, id);
+        return {
+          focused: landing.focused,
+          belowHeader: landing.headingTop >= landing.headerBottom,
+          // Lands at its scroll margin, unless the page can't scroll that far. A card the
+          // browser scrolled to while its reveal animation (y: 24px) was still pending then
+          // rises by up to that much; the heading must still be below the header.
+          atTop:
+            (landing.fromMargin >= -REVEAL_RISE && landing.fromMargin <= 2) || landing.atBottom,
+        };
+      },
+      { timeout: 20_000 },
+    )
     .toEqual({ focused: true, belowHeader: true, atTop: true });
 }
 
@@ -184,9 +190,16 @@ test('reloading after scrolling away: restored position, or the hash, never the 
   await page.reload();
   await expect(page.locator('#now')).toBeAttached();
   const landing = await settledLanding(page, 'now');
-  const restored = Math.abs(landing.scrollY - scrolled) <= 2;
+  // A restore is not pixel-exact: Chromium restores a few px off, and a late 1 px reflow (a
+  // font swap) then makes scroll anchoring move it a few px more (5–7 px seen under a 4×
+  // slower CPU). The hash's landing is 900 px away, so allowing up to the jump gap (24 px)
+  // can't mistake one outcome for the other.
+  const restored = Math.abs(landing.scrollY - scrolled) <= 24;
   if (restored) {
-    expect(landing.focused).toBe(true);
+    expect(
+      landing.focused,
+      `restored to ${String(landing.scrollY)} (scrolled to ${String(scrolled)})`,
+    ).toBe(true);
   } else {
     await expectLandedOn(page, 'now');
   }
@@ -279,9 +292,31 @@ test('a script scroll right after load that is not a fragment scroll wins', asyn
   expect(landing.focused).toBe(true);
 });
 
-for (const [kind, style] of [
-  ['grows', { letterSpacing: '0.04em', lineHeight: '1.85' }],
-  ['shrinks', { letterSpacing: '-0.02em', lineHeight: '1.35' }],
+/**
+ * Makes every animation frame take about 300 ms for a while (a busy loop in
+ * requestAnimationFrame), like a heavy concept in a software-rendered browser: then a reflow's
+ * scroll event, its ResizeObserver report and the layout check can be hundreds of ms apart.
+ */
+async function slowFrames(page: Page, forMs = 2500) {
+  await page.evaluate((duration) => {
+    const until = performance.now() + duration;
+    const slow = () => {
+      const start = performance.now();
+      while (performance.now() - start < 300) {
+        // Busy: this frame takes 300 ms.
+      }
+      if (performance.now() < until) requestAnimationFrame(slow);
+    };
+    requestAnimationFrame(slow);
+  }, forMs);
+}
+
+for (const [kind, style, slow] of [
+  ['grows', { letterSpacing: '0.04em', lineHeight: '1.85' }, false],
+  ['shrinks', { letterSpacing: '-0.02em', lineHeight: '1.35' }, false],
+  // Fails without the decision/layout-check ordering in WebKit (and on Journey); the other
+  // engines pass either way, so it is regression coverage there.
+  ['grows, on slow frames', { letterSpacing: '0.04em', lineHeight: '1.85' }, true],
 ] as const) {
   test(`a deep link stays at its landing when the whole page reflows after load (${kind})`, async ({
     page,
@@ -290,6 +325,7 @@ for (const [kind, style] of [
     // scroll-anchoring node (compensated by the browser) and partly below it (not).
     const finishLoading = await visitDeepLinkWithHeldLoad(page, '#now');
     await finishLoading();
+    if (slow) await slowFrames(page);
     await page.evaluate((values) => {
       document.body.style.setProperty('letter-spacing', values.letterSpacing);
       document.body.style.setProperty('line-height', values.lineHeight);
@@ -362,14 +398,19 @@ for (const [kind, by] of [
  * without any input. The chapter must still end at its landing, also when the heading sits far
  * below the chapter's top (as under the Worlds overview's vignette).
  */
-for (const [kind, extra] of [
-  ['', 0],
-  [' with the heading far below the chapter top', 400],
+// The slow-frame variant is regression coverage: it passes in every engine without the
+// decision/layout-check ordering too. The ordering itself is proven by the slow-frame reflow
+// test (which failed without it in WebKit) and by the unit tests.
+for (const [kind, extra, slow] of [
+  ['', 0, false],
+  [' with the heading far below the chapter top', 400, false],
+  [' on slow frames', 0, true],
 ] as const) {
   test(`an engine's late scroll to the fragment's heading is realigned${kind}`, async ({
     page,
   }) => {
     const finishLoading = await visitDeepLinkWithHeldLoad(page, '#energy-title', '#energy h2');
+    if (slow) await slowFrames(page);
     await page.evaluate((padding) => {
       if (padding) {
         document.getElementById('energy')?.style.setProperty('padding-top', `${String(padding)}px`);
