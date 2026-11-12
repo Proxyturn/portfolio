@@ -32,16 +32,14 @@ To run the contact function locally too, use the Vercel CLI after linking the pr
 | `npm test`                        | All Vitest projects: `unit` (jsdom), `api`, `scripts` and `privacy` (node)                 |
 | `npm run test:coverage`           | Same, with coverage thresholds (80% lines and branches for `src/`, `api/`, `scripts/`)     |
 | `npm run test:privacy`            | Privacy scan only (source + `dist/` when present)                                          |
-| `npm run test:e2e`                | Playwright: Chromium, Firefox, WebKit, mobile (builds first locally)                       |
+| `npm run test:e2e`                | Playwright: Chromium, WebKit, mobile (builds first locally)                                |
 | `npm run test:headers`            | Security headers against a deployed URL: `PREVIEW_URL=https://… npm run test:headers`      |
 | `npm run check`                   | Everything CI runs before E2E                                                              |
 | `npm run cv`                      | Regenerate the CV PDF from `src/content/cv.ts` (commit only a Windows build; see "CV PDF") |
 
-First E2E run: `npx playwright install chromium firefox webkit`.
+First E2E run: `npx playwright install chromium webkit`.
 
-> **Local note (this Windows machine):** Playwright's Firefox fails to start with a Windows
-> side-by-side (`mozglue`) error. That's an OS issue, not the project. Firefox runs in CI on
-> Ubuntu. Locally use `npx playwright test --project=chromium --project=webkit --project=mobile`.
+Firefox is not tested (William's decision, 2026-11-11).
 
 ## Project structure
 
