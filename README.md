@@ -167,7 +167,15 @@ and the PDF cannot disagree. It is English only.
 Vercel's GitHub integration builds every branch: each concept branch gets its own preview
 URL, and `main` deploys to production. After each successful deployment,
 `.github/workflows/preview.yml` checks the security headers and the Lighthouse budgets
-(mobile: Performance ≥ 90, Accessibility, Best Practices and SEO ≥ 95).
+(mobile: Performance ≥ 90, Accessibility, Best Practices and SEO ≥ 95). Vercel reports
+deployments as a commit status, so the workflow runs on `status` events and derives the URL
+from the branch (production for `main`, the Vercel branch alias otherwise). Previews are
+served with `X-Robots-Tag: noindex`, so Lighthouse skips only the `is-crawlable` audit there.
+The workflow runs from `main`'s copy, so its runs are listed under `main`'s latest commit; the
+run name gives the deployed commit and each job name the URL. Lighthouse reports are not sent
+to public report storage: they are kept as a 7-day workflow artifact, which any signed-in GitHub
+user can download because the repo is public, and not attached at all when the bypass secret is
+set (the reports would contain it).
 
 ## Security
 
