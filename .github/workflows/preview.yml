@@ -1,21 +1,90 @@
 name: Preview checks
 
-# Vercel's GitHub integration reports each deployment as a GitHub deployment status.
-# When a preview (or production) deployment succeeds, check its headers and Lighthouse budgets.
+# After each successful Vercel deployment, check its security headers and Lighthouse budgets.
+#
+# Vercel's GitHub integration reports deployments on this repo as a commit status (context
+# "Vercel"), not as GitHub deployments, so this runs on `status` events. Its target_url is the
+# Vercel dashboard, not the site, so the site URL is derived from the branch(es) whose head is
+# the commit: `main` is production, any other branch is its Vercel branch alias.
+#
+# A `status` workflow runs from main's copy, so GitHub files every run (and its checks) under
+# main's latest commit, whichever branch was deployed: the run name gives the deployed commit,
+# and each job name the URL checked. Each deployment also starts one all-skipped run (for
+# Vercel's "pending" status).
 on:
-  deployment_status:
+  status:
+
+run-name: Preview checks for ${{ github.event.sha }}
 
 permissions:
   contents: read
 
+concurrency:
+  group: preview-${{ github.event.context }}-${{ github.event.sha }}-${{ github.event.state }}
+  cancel-in-progress: true
+
+env:
+  PRODUCTION_URL: https://portfolio-bice-two-69.vercel.app
+  # Vercel branch aliases: https://<project>-git-<branch slug>-<team>.vercel.app
+  BRANCH_URL_PREFIX: https://portfolio-git-
+  BRANCH_URL_SUFFIX: -proxyturn.vercel.app
+
 jobs:
+  targets:
+    if: github.event.context == 'Vercel' && github.event.state == 'success'
+    name: Find the deployed URL
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      urls: ${{ steps.urls.outputs.urls }}
+    steps:
+      - id: urls
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.sha }}
+        run: |
+          set -euo pipefail
+          branches=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/branches-where-head" --jq '.[].name')
+          urls='[]'
+          while IFS= read -r branch; do
+            [ -z "$branch" ] && continue
+            if [ "$branch" = "main" ]; then
+              url="$PRODUCTION_URL"
+              production=true
+            else
+              # Vercel's slug: lowercase, every other character becomes "-".
+              slug=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+              host="${BRANCH_URL_PREFIX#https://}${slug}${BRANCH_URL_SUFFIX}"
+              # Longer hostnames are shortened by Vercel with a hash: skip rather than guess.
+              label="${host%%.*}"
+              if [ "${#label}" -gt 63 ] || [ -z "$slug" ]; then
+                echo "::notice::Skipping branch with no predictable alias: $branch"
+                continue
+              fi
+              url="https://$host"
+              production=false
+            fi
+            urls=$(jq -c --arg url "$url" --argjson production "$production" \
+              '. + [{url: $url, production: $production}]' <<<"$urls")
+          done <<<"$branches"
+          echo "Targets: $urls"
+          echo "urls=$urls" >> "$GITHUB_OUTPUT"
+
   checks:
-    if: github.event.deployment_status.state == 'success'
-    name: Headers + Lighthouse on ${{ github.event.deployment_status.environment }}
+    needs: targets
+    if: needs.targets.outputs.urls != '[]'
+    name: Headers + Lighthouse on ${{ matrix.target.url }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.targets.outputs.urls) }}
     env:
-      PREVIEW_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+      PREVIEW_URL: ${{ matrix.target.url }}
+      # Previews are served with `X-Robots-Tag: noindex`, which fails Lighthouse's
+      # "is-crawlable" audit by design; lighthouserc.cjs skips that audit when this is true.
+      LHCI_PREVIEW: ${{ matrix.target.production && 'false' || 'true' }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,3 +103,11 @@ jobs:
         run: npx --yes @lhci/cli@0.16.0 autorun --collect.url="$PREVIEW_URL"
         env:
           LHCI_EXTRA_HEADERS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET && format('{{"x-vercel-protection-bypass":"{0}"}}', secrets.VERCEL_AUTOMATION_BYPASS_SECRET) || '{}' }}
+      # Reports include the request headers, so they are attached only when no bypass secret
+      # was sent (artifacts of a public repo can be downloaded by any GitHub user).
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && env.VERCEL_AUTOMATION_BYPASS_SECRET == ''
+        with:
+          name: lighthouse-${{ matrix.target.production && 'production' || 'preview' }}-${{ strategy.job-index }}
+          path: .lighthouseci/reports/
+          retention-days: 7
