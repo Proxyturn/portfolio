@@ -989,6 +989,8 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       const { target, heading, moveTo } = story();
       stop = settleDeepLink(target, heading, true);
       moveTo(top);
+      // Anchoring is applied during the layout, before the report; its event comes later.
+      scrollPosition = pageY;
       layoutChanged();
       // Scroll anchoring's scroll event comes while the layout check is pending.
       scrollTo(pageY);
@@ -1139,6 +1141,7 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       quiet();
       expect(realigns()).toEqual([[{ top: 1000, behavior: 'instant' }]]);
       moveTo(1040);
+      scrollPosition = 1025;
       layoutChanged(40);
       scrollTo(1025);
       runFrames();
@@ -1214,6 +1217,85 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       expect(stillAligning(moveTo, 1100)).toBe(false);
     });
 
+    it('takes anchoring larger than the height change for layout (Terminal #contact in CI)', () => {
+      // The page got 88 px shorter, the target moved 88 px up, and anchoring moved the page
+      // 138 px up (content above the anchor shrank more than the page did).
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      vi.advanceTimersByTime(1);
+      moveTo(912);
+      scrollPosition = 862;
+      layoutChanged(88);
+      scrollTo(862);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      runFrames();
+      expect(realigns()).toEqual([[{ top: 912, behavior: 'instant' }]]);
+      runFrames();
+      quiet();
+      expect(stillAligning(moveTo, 950)).toBe(true);
+    });
+
+    it('takes a move after the report for a scroll, even if the net move looks like anchoring', () => {
+      // Terminal in WebKit CI: a font reflow moves the target 114 px up and anchoring the page
+      // 87 px up; then the visitor scrolls 80 px down before the layout check runs (net -7 px).
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      vi.advanceTimersByTime(1);
+      moveTo(886);
+      scrollPosition = 913;
+      layoutChanged(139);
+      scrollTo(913);
+      scrollTo(993);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      runFrames();
+      expect(realigns()).toEqual([]);
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1000)).toBe(false);
+    });
+
+    it('judges a reflow as reported even when a later change is already applied', () => {
+      // Terminal in WebKit CI: a font reflow (target -114 px, anchoring -87 px) is reported,
+      // then more content is added above (+176 px) before the first layout check runs.
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      vi.advanceTimersByTime(1);
+      moveTo(886);
+      scrollPosition = 913;
+      layoutChanged(139);
+      scrollTo(913);
+      moveTo(1062);
+      runFrames();
+      expect(realigns()).toEqual([[{ top: 1062, behavior: 'instant' }]]);
+      layoutChanged(264);
+      runFrames();
+      quiet();
+      expect(stillAligning(moveTo, 1100)).toBe(true);
+    });
+
+    it('keeps aligning when a reflow that moved only the content is followed by an anchored one', () => {
+      // The first reflow moves the content but not the page (no anchoring: the page didn't move
+      // up to its report). A second reflow's anchoring lands after that report but before its
+      // check, and is reported later: it must still be taken for that second reflow's anchoring.
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      moveTo(1040);
+      layoutChanged(40);
+      moveTo(1100);
+      scrollPosition = 1060;
+      scrollTo(1060);
+      runFrames();
+      layoutChanged(60);
+      runFrames();
+      runFrames();
+      quiet();
+      expect(stillAligning(moveTo, 1150)).toBe(true);
+    });
+
     it('accepts the false positive: a reflow right after a no-input scroll realigns', () => {
       const layoutChanged = observeLayout();
       const { target, heading, moveTo } = story();
@@ -1281,6 +1363,7 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       stop = settleDeepLink(target, heading, true);
       // Content above grew by 400 px and the browser's scroll anchoring followed it.
       moveTo(1400);
+      scrollPosition = 1400;
       layoutChanged();
       scrollTo(1400);
       expect(frames).toHaveLength(1);
