@@ -811,18 +811,33 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
 
   describe('scrolls that are not its own', () => {
     let frames: FrameRequestCallback[] = [];
+    /** Each queued frame's id (unique), and the ids cancelled before they ran. */
+    let frameIds: number[] = [];
+    let nextFrameId = 0;
+    const cancelled = new Set<number>();
     let cancelFrame: MockInstance<(handle: number) => void> | undefined;
     beforeEach(() => {
       vi.useFakeTimers();
       frames = [];
+      frameIds = [];
+      nextFrameId = 0;
+      cancelled.clear();
       vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+        nextFrameId += 1;
         frames.push(callback);
-        return frames.length;
+        frameIds.push(nextFrameId);
+        return nextFrameId;
       });
-      cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+      cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((handle) => {
+        cancelled.add(handle);
+      });
     });
+    /** Runs the frames queued so far (not ones they request), skipping cancelled ones. */
     const runFrames = () => {
-      for (const callback of frames.splice(0)) callback(0);
+      const ids = frameIds.splice(0);
+      frames.splice(0).forEach((callback, i) => {
+        if (!cancelled.has(ids[i] ?? 0)) callback(0);
+      });
     };
     const scrollTo = (y: number) => {
       scrollPosition = y;
@@ -1147,6 +1162,51 @@ describe('settleDeepLink (keeping a deep link while the page loads)', () => {
       runFrames();
       runFrames();
       layoutChanged(152);
+      runFrames();
+      expect(realigns()).toEqual([]);
+      quiet();
+      expect(realigns()).toEqual([]);
+      expect(stillAligning(moveTo, 1100)).toBe(false);
+    });
+
+    it("takes anchoring for layout when a smaller change's check ran before the reflow's report", () => {
+      // Seen on Terminal in WebKit: a 3 px change is reported, then a 433 px reflow moves the
+      // target 251 px and anchoring moves the page 215 px at once; a plain check and the 3 px
+      // change's check both see the move before the observer reports the reflow.
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      vi.advanceTimersByTime(1);
+      layoutChanged(3);
+      moveTo(1251);
+      scrollPosition = 1215;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      runFrames();
+      expect(realigns()).toEqual([]);
+      layoutChanged(433);
+      runFrames();
+      expect(realigns()).toEqual([[{ top: 1251, behavior: 'instant' }]]);
+      runFrames();
+      quiet();
+      expect(stillAligning(moveTo, 1300)).toBe(true);
+    });
+
+    it('keeps a visitor scroll that a reflow moved the content against, through a second reflow', () => {
+      // Seen on Journey (slow frames): a plain check sees the visitor's +80 px, a 246 px
+      // reflow moves the content 141 px up before two frames pass, then a 152 px reflow moves
+      // it back down (net +11 px, the same way as the visitor's scroll).
+      const layoutChanged = observeLayout();
+      const { target, heading, moveTo } = story();
+      stop = settleDeepLink(target, heading, true);
+      vi.advanceTimersByTime(1);
+      scrollPosition = 1080;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      moveTo(859);
+      layoutChanged(246);
+      runFrames();
+      moveTo(1011);
+      layoutChanged(152);
+      runFrames();
       runFrames();
       expect(realigns()).toEqual([]);
       quiet();

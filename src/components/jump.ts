@@ -283,9 +283,10 @@ export function scrollToLanding(target: HTMLElement): void {
  *   and a check that runs before a scroll's `scroll` event waits for it the same way. (A
  *   smooth fragment scroll is therefore allowed to finish and then corrected in one instant
  *   step, rather than cancelled at its first step: a first step can't be told apart from a
- *   short find-in-page jump.) A move a plain check (load, a hashchange) saw counts as seen,
- *   and so as a scroll rather than a later reflow's anchoring, only once two frames have
- *   passed without the observer reporting a reflow.
+ *   short find-in-page jump.) A move a check saw but couldn't explain counts as seen, and so
+ *   as a scroll rather than a later reflow's anchoring: at once when a layout check saw the
+ *   content move against it, otherwise (a plain check, or the check of a smaller layout
+ *   change) only once two frames have passed without the observer reporting a reflow.
  *   Decisions and layout checks run in animation frames, so in a hidden tab they wait until
  *   the tab is shown, or until the stop timer below ends settling.
  *   Accepted false positives, each costing a small correction: a no-input scroll that happens
@@ -416,8 +417,8 @@ export function settleDeepLink(
     const recent = window.scrollY - lastY;
     const sameWay = () =>
       tops.some((top, i) => Math.sign(top - (lastTops[i] ?? top)) === Math.sign(recent));
-    const byLayout =
-      layoutChange > 0 && !seenBefore && moved <= layoutChange + 1 && (moved <= 1 || sameWay());
+    const against = moved > 1 && !sameWay();
+    const byLayout = layoutChange > 0 && !seenBefore && moved <= layoutChange + 1 && !against;
     if (sightingFrame) window.cancelAnimationFrame(sightingFrame);
     sightingFrame = 0;
     let unexplained = false;
@@ -433,10 +434,15 @@ export function settleDeepLink(
     }
     const y = window.scrollY;
     const seenTops = [documentTop(target), documentTop(focusElement)];
-    if (unexplained && layoutChange === 0) {
-      // A plain check can run between a reflow's scroll anchoring and the observer's report
-      // of that reflow (WebKit reports it a frame later). Count the move as seen only once two
-      // frames have passed without such a report.
+    // A layout check that saw the content move against the page knows the move is not
+    // anchoring: it counts as seen at once. Otherwise an unexplained move may still be a reflow
+    // whose report hasn't come yet.
+    if (unexplained && !(layoutChange > 0 && against)) {
+      // A check can run between a reflow's scroll anchoring and the observer's report of that
+      // reflow (WebKit reports it a frame later): a plain check, or the check of an earlier,
+      // smaller layout change that can't explain the move (seen on Terminal: a 3 px change's
+      // check ran after a 433 px reflow had anchored the page 215 px, before its report). Count
+      // the move as seen only once two frames have passed without such a report.
       sightingFrame = window.requestAnimationFrame(() => {
         sightingFrame = window.requestAnimationFrame(() => {
           sightingFrame = 0;
