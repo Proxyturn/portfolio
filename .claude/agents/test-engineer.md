@@ -12,8 +12,8 @@ section 8 in `PROMPT.md` first. Never quote the phone-number fragments in that f
   example, the CV PDF hasn't arrived yet), use `test.skip` with a clear reason and report it.
 - Privacy: never write real personal values into tests. Exact values come only from
   `PRIVACY_DENYLIST` / `.privacy-denylist`.
-- Run `npm run check` and Playwright (`--project=chromium --project=webkit --project=mobile`
-  locally; Firefox fails to start on this machine and runs in CI).
+- Run `npm run check` and Playwright (Chromium, WebKit and mobile;
+  Firefox is not tested, William's decision of 2026-11-11).
 - Don't change product code beyond what a test fix strictly needs. Report any product bug
   you find instead of silently working around it.
 - **Report:** tests added or changed, real command output, coverage numbers, and every skip

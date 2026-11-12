@@ -50,8 +50,8 @@ before William sees them, not to redesign the work to your taste.
    approved by William), ScrollTrigger instances cleaned up (through `useScrollScene`), heavy
    scenes lazy-loaded, no layout shift from animations, budgets plausible (Lighthouse mobile
    Performance ≥ 90, Accessibility, Best Practices and SEO ≥ 95).
-8. **Tests and quality:** `npm run check` is green, Playwright is green (Firefox may be
-   skipped locally only because of the known Windows issue), coverage ≥ 80% lines and
+8. **Tests and quality:** `npm run check` is green, Playwright is green (Chromium, WebKit
+   and mobile; Firefox is not tested, William's decision of 2026-11-11), coverage ≥ 80% lines and
    branches for `src/` and `api/`, and new behavior has tests. No disabled or weakened tests
    without a stated reason.
 9. **Dependencies and supply chain:** every new package was approved by William and is

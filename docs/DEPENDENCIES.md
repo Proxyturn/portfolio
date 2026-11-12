@@ -39,18 +39,18 @@ SDK, so no extra dependency.
 
 ## Development only (never deployed)
 
-| Package                                                                              | Why                                                                                                                                          |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `typescript` 6.0.3                                                                   | Strict type checking. Pinned to 6.0 because `typescript-eslint` does not support TS 7 yet.                                                   |
-| `vite`, `@vitejs/plugin-react`                                                       | Dev server and production build.                                                                                                             |
-| `vitest`, `@vitest/coverage-v8`, `jsdom`                                             | Unit, component, API and privacy tests, with coverage thresholds (80% lines and branches).                                                   |
-| `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom` | Component tests that interact like a user does.                                                                                              |
-| `@playwright/test`                                                                   | E2E in Chromium, Firefox, WebKit and a mobile viewport, plus the deployed-headers check. Its Chromium also prints the CV PDF (`npm run cv`). |
-| `@axe-core/playwright`                                                               | Accessibility audit in E2E (zero serious or critical violations).                                                                            |
-| `eslint`, `@eslint/js`, `typescript-eslint`, `globals`                               | Linting, including security bans (`innerHTML`, `dangerouslySetInnerHTML`, `eval`, `new Function`).                                           |
-| `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`                           | React-specific lint rules.                                                                                                                   |
-| `prettier`, `eslint-config-prettier`                                                 | Formatting (checked in CI).                                                                                                                  |
-| `@types/node`, `@types/react`, `@types/react-dom`                                    | Type definitions.                                                                                                                            |
+| Package                                                                              | Why                                                                                                                                 |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `typescript` 6.0.3                                                                   | Strict type checking. Pinned to 6.0 because `typescript-eslint` does not support TS 7 yet.                                          |
+| `vite`, `@vitejs/plugin-react`                                                       | Dev server and production build.                                                                                                    |
+| `vitest`, `@vitest/coverage-v8`, `jsdom`                                             | Unit, component, API and privacy tests, with coverage thresholds (80% lines and branches).                                          |
+| `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom` | Component tests that interact like a user does.                                                                                     |
+| `@playwright/test`                                                                   | E2E in Chromium, WebKit and a mobile viewport, plus the deployed-headers check. Its Chromium also prints the CV PDF (`npm run cv`). |
+| `@axe-core/playwright`                                                               | Accessibility audit in E2E (zero serious or critical violations).                                                                   |
+| `eslint`, `@eslint/js`, `typescript-eslint`, `globals`                               | Linting, including security bans (`innerHTML`, `dangerouslySetInnerHTML`, `eval`, `new Function`).                                  |
+| `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`                           | React-specific lint rules.                                                                                                          |
+| `prettier`, `eslint-config-prettier`                                                 | Formatting (checked in CI).                                                                                                         |
+| `@types/node`, `@types/react`, `@types/react-dom`                                    | Type definitions.                                                                                                                   |
 
 ## Deliberately not added
 
