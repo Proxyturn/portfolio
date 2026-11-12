@@ -262,11 +262,12 @@ export function scrollToLanding(target: HTMLElement): void {
  *   up after `SETTLE_MAX_REALIGNS` scrolls.
  * - when the page is no longer where this code last put or confirmed it:
  *   - in a check that a layout change triggered (the ResizeObserver saw the root's or the
- *     body's height change), a move that no earlier check had seen, no larger than that
- *     change, and in the direction the target or its heading moved, is that reflow's scroll
- *     anchoring (a web-font swap, a pin spacer). Anchoring compensates for what changed above
- *     its anchor node but not for what changed between the anchor and the target, so the
- *     page moves while the target ends off its margin. It is realigned whatever the
+ *     body's height change), a move up to the observer's report that no earlier check had
+ *     seen, in the direction the target or its heading moved, and no larger than the height
+ *     change plus that content move, is that reflow's scroll anchoring (a web-font swap, a pin
+ *     spacer). A move after the report is a scroll. Anchoring compensates for what changed
+ *     above its anchor node but not for what changed between the anchor and the target, so
+ *     the page moves while the target ends off its margin. It is realigned whatever the
  *     geometry, like a reflow without anchoring.
  *   - otherwise it is a scroll, classified by geometry. It is an engine's fragment scroll
  *     when the element the hash names, or the target, sits at its own scroll margin, or the
@@ -291,11 +292,14 @@ export function scrollToLanding(target: HTMLElement): void {
  *   the tab is shown, or until the stop timer below ends settling.
  *   Accepted false positives, each costing a small correction: a no-input scroll that happens
  *   to leave the hash's element or the target within 2 px of its margin is realigned, and so
- *   is one followed within that wait by a reflow at least as tall as the scroll that moves
- *   the content the same way.
- *   Accepted false negative: a reflow whose anchoring moves the page against the net move of
- *   both the target and its heading is judged a scroll, so aligning can end with the target
- *   off its landing.
+ *   is one made before a reflow's report (in the same frame, or with no check in between) that
+ *   goes the way that reflow moved the content and is no larger than its height change plus
+ *   that content move: it can't be told apart from the reflow's anchoring.
+ *   Accepted false negatives, where aligning can end with the target off its landing: a
+ *   reflow whose anchoring moves the page against the net move of both the target and its
+ *   heading is judged a scroll; and two reflows reported as one (the browser merges reports
+ *   within a frame) can show a small net height change, so the anchoring of the larger one
+ *   exceeds the cap and is judged a scroll.
  * It stops at the first pointerdown, keydown, wheel or touchstart, when the hash no longer
  * names `target`, at the later of `SETTLE_LIMIT_MS` after it starts and `SETTLE_AFTER_LOAD_MS`
  * after `load` (`SETTLE_HARD_LIMIT_MS` at most), or when the returned cleanup runs.
@@ -314,6 +318,13 @@ export function settleDeepLink(
   let lastTops = [documentTop(target), documentTop(focusElement)];
   /** Frames before a move seen by a plain check counts as seen (cancelled on stop). */
   let sightingFrame = 0;
+  /**
+   * The page position, and where the target and its heading were, when the observer last
+   * reported a layout change. The browser applies scroll anchoring during that layout, before
+   * the report, so what moved up to the report is that reflow's; a move after it is a scroll.
+   */
+  let reportY = expectedY;
+  let reportTops = lastTops;
   let frame = 0;
   let quiet = 0;
   /** Animation frames requested on the way to a quiet decision (cancelled on stop). */
@@ -389,11 +400,12 @@ export function settleDeepLink(
 
   /**
    * One check. `layoutChange` is how much the page's height changed when the ResizeObserver
-   * triggered it, and 0 otherwise. A page move no larger than that change, that no earlier
-   * check had seen, and in the direction the target or its heading moved since the last
-   * check, is its scroll anchoring, not a scroll, and the target is realigned whatever the
-   * geometry; any other move can't come from it (a visitor's scroll around the same moment)
-   * and is judged as a scroll.
+   * triggered it, and 0 otherwise. A layout check judges the page as it was at the observer's
+   * report: a move up to the report that no earlier check had seen, in the direction the target
+   * or its heading moved between the last check and the report, and no larger than the height
+   * change plus that content move, is the reflow's scroll anchoring, not a scroll, and the
+   * target is realigned whatever the geometry. Any other move (one after the report, against
+   * the content, or larger) can't come from it and is judged as a scroll.
    * `document.fonts.ready` runs a plain check: it resolves even when no font changed (WebKit,
    * after load), and a swap's reflow reaches the ResizeObserver anyway.
    */
@@ -407,18 +419,29 @@ export function settleDeepLink(
     const active = document.activeElement;
     if (!active || active === document.body) focusElement.focus({ preventScroll: true });
     if (!aligning) return;
-    const tops = [documentTop(target), documentTop(focusElement)];
     const moved = Math.abs(window.scrollY - expectedY);
-    // Only a move that came with this layout change can be its scroll anchoring: one an
-    // earlier check already saw was there before it (a visitor's scroll, judged as such). And
-    // anchoring moves the page the way the content around the target moved (the target or its
-    // heading, whichever it anchored nearest to), never against it.
+    // A layout check judges the reflow as it was when the observer reported it (later layout
+    // changes may already be applied, with their reports still to come). Its scroll anchoring
+    // is what moved the page up to the report; it can't be a move an earlier check already saw
+    // (a visitor's scroll, judged as such), nor a move after the report. It goes the way the
+    // content around the target moved (the target or its heading, whichever it anchored
+    // nearest to), never against it. And it can exceed the page's height change (content above
+    // the anchor shrank while content below grew), but not by more than the content moved.
+    const layoutCheck = layoutChange > 0;
+    const y0 = layoutCheck ? reportY : window.scrollY;
+    const tops = layoutCheck ? reportTops : [documentTop(target), documentTop(focusElement)];
+    const shifts = tops.map((top, i) => top - (lastTops[i] ?? top));
     const seenBefore = Math.abs(lastY - expectedY) > 1;
-    const recent = window.scrollY - lastY;
-    const sameWay = () =>
-      tops.some((top, i) => Math.sign(top - (lastTops[i] ?? top)) === Math.sign(recent));
-    const against = moved > 1 && !sameWay();
-    const byLayout = layoutChange > 0 && !seenBefore && moved <= layoutChange + 1 && !against;
+    const recent = y0 - lastY;
+    const afterReport = layoutCheck && Math.abs(window.scrollY - reportY) > 1;
+    const against = moved > 1 && !shifts.some((shift) => Math.sign(shift) === Math.sign(recent));
+    const contentMoved = Math.max(...shifts.map(Math.abs));
+    const byLayout =
+      layoutCheck &&
+      !seenBefore &&
+      !afterReport &&
+      !against &&
+      moved <= layoutChange + contentMoved + 1;
     if (sightingFrame) window.cancelAnimationFrame(sightingFrame);
     sightingFrame = 0;
     let unexplained = false;
@@ -434,10 +457,11 @@ export function settleDeepLink(
     }
     const y = window.scrollY;
     const seenTops = [documentTop(target), documentTop(focusElement)];
-    // A layout check that saw the content move against the page knows the move is not
-    // anchoring: it counts as seen at once. Otherwise an unexplained move may still be a reflow
-    // whose report hasn't come yet.
-    if (unexplained && !(layoutChange > 0 && against)) {
+    // A layout check that saw the page move, up to its report, against the content knows that
+    // move is not anchoring: it counts as seen at once. Otherwise (a move after the report, or
+    // one a smaller change can't explain) it may still be a later reflow whose report hasn't
+    // come yet.
+    if (unexplained && !(layoutChange > 0 && against && !afterReport)) {
       // A check can run between a reflow's scroll anchoring and the observer's report of that
       // reflow (WebKit reports it a frame later): a plain check, or the check of an earlier,
       // smaller layout change that can't explain the move (seen on Terminal: a 3 px change's
@@ -500,7 +524,11 @@ export function settleDeepLink(
       heights.set(entry.target, height);
       if (previous !== undefined) change = Math.max(change, Math.abs(height - previous));
     }
-    if (change > 0.5) nextFrame(change);
+    if (change > 0.5) {
+      reportY = window.scrollY;
+      reportTops = [documentTop(target), documentTop(focusElement)];
+      nextFrame(change);
+    }
   };
   const observer =
     align && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
