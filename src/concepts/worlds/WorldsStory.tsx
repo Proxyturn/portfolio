@@ -113,9 +113,15 @@ export function WorldsStory() {
     };
   }, [scene, arrangement]);
 
-  // Text reflows when the language changes: re-measure the chapter positions.
+  // Text reflows when the language changes: re-measure the chapter positions. Only then: a
+  // global refresh restores the scroll position, which would cut off a smooth jump in progress
+  // (the scene usually arrives right after load, often during a first chapter-nav click), and
+  // the scene's own triggers measure themselves when it starts.
+  const measuredLang = useRef(lang);
   useEffect(() => {
-    if (scene) ScrollTrigger.refresh();
+    if (!scene || measuredLang.current === lang) return;
+    measuredLang.current = lang;
+    ScrollTrigger.refresh();
   }, [lang, scene]);
 
   const chronological = jobsChronological();
