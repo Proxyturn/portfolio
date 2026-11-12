@@ -24,7 +24,7 @@ test('chapter navigation jumps to a chapter and marks it current', async ({ page
 
 /**
  * Safari (and Playwright's WebKit) only Tab to links when the user enables "Press Tab to
- * highlight each item", so the link-order test runs on Chromium and Firefox only.
+ * highlight each item", so the link-order test runs on Chromium only.
  */
 test('keyboard: skip link first, visible focus, then navigation in order', async ({
   page,
