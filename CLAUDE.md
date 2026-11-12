@@ -59,8 +59,9 @@ William's request
 ## Fixed decisions (spec section 3: don't re-ask)
 
 - **Stack:** React + TypeScript (strict) + Vite, GSAP + ScrollTrigger.
-- **Tests:** Vitest + React Testing Library; Playwright on Chromium, Firefox, WebKit and
-  mobile; axe.
+- **Tests:** Vitest + React Testing Library; Playwright on Chromium, WebKit and mobile;
+  axe. Firefox was dropped from the tests (William, 2026-11-11: don't spend effort on
+  Firefox-only issues).
 - **Hosting:** Vercel, as a static build plus a serverless function `/api/contact`.
 - **Languages:** EN + PT-BR with a toggle.
 - **Concepts:** three branches (`concept/journey`, `concept/terminal`, `concept/worlds`),
@@ -151,8 +152,5 @@ William's request
 
 ```bash
 npm run check          # lint, format, types, build, unit/API/privacy tests with coverage
-npx playwright test --project=chromium --project=webkit --project=mobile
+npx playwright test
 ```
-
-**Local note:** Playwright's Firefox fails to start on this Windows machine (a side-by-side
-`mozglue` error, an OS issue). Firefox runs in CI.
